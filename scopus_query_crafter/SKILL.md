@@ -4,7 +4,7 @@ description: "Scopus检索式构建器 | 三层关键词→Scopus Advanced Searc
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.2
+  version: 1.3
   keywords: [Scopus, search query, bibliographic, QueryStrategist]
   triggers: [Scopus, 检索式, 高级检索]
 ---
@@ -20,7 +20,10 @@ metadata:
 # Scopus Query Crafter
 
 ## 版本
-V1.2
+V1.3
+
+## 变更记录
+- **V1.3 (2026-08-11)**：按 Elsevier Scopus Support Center 当前规则统一 Search A 为 `TITLE-ABS-KEY(对象) AND TITLE-ABS-KEY(必需技术锚点) AND TITLE-ABS-KEY(任务)`；保留 `AND NOT` 末尾规则；删除“省略字段代码即默认全部字段”的未获当前官方 Advanced Search 文档支持的口径。
 
 ## 所属系统
 **QueryStrategist** 工作流 — Search Strategist 子模块
@@ -89,7 +92,7 @@ Scopus (www.scopus.com)
 - 确定词序固定时用 `PRE/n`，噪音更少。
 - 要求两词紧挨出现时用 `W/0` 或 `PRE/0`。
 - ⚠️ **不可在同表达式内混用不同类型或不同 n 值的邻近算符**：如 `bay PRE/6 ship* PRE/0 channel` 无效；同类同 n 可序列使用。
-- 💡 **已验证的高效用法（用户官网实测通过）**：用 `W/n` 把「技术/方法层」与「应用/任务层」两个 OR 组**直接邻近连接**，比把三层各自用 `AND` 平铺更能聚焦"方法真正作用于应用"的文献。若同时**省略 `TITLE-ABS-KEY` 字段代码**（让 Scopus 默认检索全部字段）、`DOCTYPE`、`PUBYEAR` 限制，则召回面最大、返回结果最多（实测比带字段/年份/类型限制的等价式返回更多）。中立化示例：`(("autonomous vehicle" OR "self-driving car") AND ("computer vision" W/5 ("trajectory prediction" OR "semantic segmentation" OR "lane detection")))`。
+- `W/n` 与 `PRE/n` 只能连接 term 或 phrase，不能让参与的 proximity expression 含 `AND` 或 `AND NOT`。Search A 使用稳定的显式 `TITLE-ABS-KEY` 字段；邻近检索作为补充精确式，不替代三概念基线式。
 
 ### 精确短语匹配
 - **宽松/近似短语**：用**一对直双引号**包裹：`"computer vision"`（注意是一对 `"..."`，不是两对 `""..."`）。
@@ -136,13 +139,12 @@ TITLE-ABS-KEY((autonomous vehicle OR "self-driving car") AND ("computer vision" 
 #2: #1 AND DOCTYPE(ar) AND PUBYEAR AFT 2019  // 限定类型和时间
 `
 
-**检索式 D：高召回关联检索（方法↔应用邻近，全字段，无年份/类型限制）**
+**检索式 D：关联检索（方法↔应用邻近）**
 `
-(("autonomous vehicle" OR "self-driving car") AND ("computer vision" W/5 ("trajectory prediction" OR "semantic segmentation" OR "lane detection")))
+TITLE-ABS-KEY(("autonomous vehicle" OR "self-driving car") AND ("computer vision" W/5 ("trajectory prediction" OR "semantic segmentation" OR "lane detection")))
 `
-- 特点：省略 `TITLE-ABS-KEY` → 默认检索**全部字段**；不写 `PUBYEAR`/`DOCTYPE` → 召回面最大。
-- 用 `W/5` 把"方法"与"应用"两个 OR 组邻近连接，在放宽顶层过滤的同时仍聚焦"方法真正作用于应用"的文献。
-- **适用场景**：想最大化查全率、先捞回尽可能多的候选文献时使用（用户官网实测：此结构比带字段/年份/类型限制的等价式返回结果更多）。
+- 用 `W/5` 把方法 term/phrase 与应用 OR 组邻近连接，聚焦“方法真正作用于应用”的文献。
+- **适用场景**：在 Search A 基线结果上进一步检验方法—任务关联；字段继续使用官方 Advanced Search 的 `TITLE-ABS-KEY`。
 - 若结果过多，可逐步加回 `TITLE-ABS-KEY(...)` 包裹、`AND PUBYEAR AFT 2019`、`AND DOCTYPE(re)` 收口。
 
 ### 3. 检索策略与使用建议
@@ -151,7 +153,7 @@ TITLE-ABS-KEY((autonomous vehicle OR "self-driving car") AND ("computer vision" 
 - **第三步**：使用检索式 B，按"被引频次"排序，锁定高影响力核心文献。
 - **第四步**：利用"检索历史"中的组合检索功能，将多个检索式的结果进行交集、并集操作。
 - **第五步**：保存效果好的检索式，开启邮件提醒，定期跟踪新文献。
-- **召回面调节**：**不写字段代码**（如省略 `TITLE-ABS-KEY`）会让 Scopus 检索**全部字段**，召回最大；**写 `TITLE-ABS-KEY`** 限定标题+摘要+关键词，召回收窄但更聚焦；**写 `TITLE`** 最精准。年份用 `PUBYEAR AFT 2019`、类型用 `DOCTYPE(re)` 同理会收窄范围。想最大查全先用检索式 D（全字段、无限制），再按需逐层加回限制收口。
+- **召回面调节**：Search A 固定使用 `TITLE-ABS-KEY`；结果过多可改用 `TITLE`，结果过少先减少精确短语或扩充同义词。年份和类型优先在结果页筛选，或按需使用 `PUBYEAR`、`DOCTYPE`。
 
 ## 常见错误与排错指南（在生成检索式时自动规避）
 1. **运算符必须大写**：`and`, `or`, `not` 会被当作检索词，必须使用 `AND`, `OR`, `AND NOT`。

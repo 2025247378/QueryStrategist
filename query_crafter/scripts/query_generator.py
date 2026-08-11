@@ -24,21 +24,27 @@ scope.json 结构:
       "explicit_exclusions": ["disease diagnosis", "in vivo animal"]
     }
 
-输出: JSON {platform: query_string}（generate，单条宽泛式，向后兼容）。
+输出: JSON {platform: query_string_or_list}；Google Scholar 在长词表下返回互补查询列表。
       --variants 时输出 {platform: [{variant,label,query}, ...]} 分层组合；IEEE 按
-      Command Search 25-term 上限自动拆分并生成 A/B/C/D/E 专属变体。
+      Command Search 按每个 search clause 校验 25-term 上限并生成 A/B/C/D/E 变体。
 """
 import argparse
 import json
 import re
-import sys
-from itertools import product
 
 
 def _join_terms(terms, op=" OR "):
-    """同层关键词用 OR 连接，并加引号。"""
+    """Join English terms; quote phrases but keep simple words lemmatizable."""
     terms = [t.strip() for t in terms if t.strip()]
-    return " OR ".join(f'"{t}"' for t in terms)
+    out = []
+    for term in terms:
+        if term.startswith('"') and term.endswith('"'):
+            out.append(term)
+        elif re.fullmatch(r"[A-Za-z0-9*?$]+", term):
+            out.append(term)
+        else:
+            out.append(f'"{term}"')
+    return " OR ".join(out)
 
 
 def _tier(tiers, key, fallback=""):
@@ -120,31 +126,36 @@ def _fmt_excl_terms(terms):
 
 
 # ---------- 各平台语法构建器 ----------
-# Search A 默认 broad=True：高召回 —— 必含领域层(tier1) 且 (技术层 OR 应用层)，
-# 不强制三层全命中，避免过窄。broad=False 时三层全 AND（精准检索 Search B 用）。
-
-_TIER_KEYS = ["tier1_species_object", "tier1", "tier2_technology_method",
-              "tier2", "tier3_application_task", "tier3"]
+# Search A 默认 broad=True：领域、必需技术锚点、任务三概念强制共现；
+# 每个概念组内部用 OR 扩展召回。
 
 
 def _tier_groups(tiers):
     """把三层关键词各自 OR 成组，返回非空组列表。"""
-    groups = []
-    for k in _TIER_KEYS:
-        j = _join_terms(tiers.get(k, []))
-        if j:
-            groups.append(j)
-    return groups
+    return [_join_terms(terms) for terms in _search_tiers(tiers) if terms]
+
+
+def _search_tiers(tiers):
+    """Return object, required technology anchor, and application tiers.
+
+    `tier2_required_anchor` is optional and lets Scope Definer distinguish the
+    indispensable technology from supporting methods such as machine learning.
+    Legacy scopes fall back to the complete Tier 2 list.
+    """
+    t1 = _tier(tiers, "tier1_species_object", "tier1")
+    t2 = (
+        tiers.get("tier2_required_anchor")
+        or tiers.get("required_anchor_terms")
+        or _tier(tiers, "tier2_technology_method", "tier2")
+    )
+    t3 = _tier(tiers, "tier3_application_task", "tier3")
+    return t1, t2, t3
 
 
 def _broad_and(groups, wrap):
-    """宽检索结构：wrap(g0) AND (wrap(g1) OR wrap(g2) ...)；单组则直接 wrap。"""
+    """Search A: require every supplied concept tier; broaden within tiers."""
     gs = [g for g in groups if g]
-    if not gs:
-        return ""
-    if len(gs) == 1:
-        return wrap(gs[0])
-    return f"{wrap(gs[0])} AND ({' OR '.join(wrap(g) for g in gs[1:])})"
+    return " AND ".join(wrap(g) for g in gs)
 
 
 def build_wos(tiers, exclusions, warnings=None, broad=True):
@@ -153,7 +164,7 @@ def build_wos(tiers, exclusions, warnings=None, broad=True):
     官方语法要点（Clarivate / CASRAI 文档）：
       - 字段标识用 TS=（Topic=标题+摘要+作者关键词+Keywords Plus），多词短语必须加引号。
       - 布尔算符 AND/OR/NOT 必须全大写；同层同义词用 OR 并括号分组：TS=("a" OR "b")。
-      - broad（Search A）：TS=(领域层) AND (TS=(技术层) OR TS=(应用层)) —— 高召回，不强制三层全命中。
+      - broad（Search A）：TS=(领域层) AND TS=(必需技术锚点) AND TS=(应用层)。
       - 排除用单个 NOT TS=(...) 把多个排除概念 OR 在一起，避免 (NOT A)(NOT B) 歧义。
       - 排除项必须是英文；非 ASCII（中文）描述无法被 WoS 匹配，需翻译或跳过。
     """
@@ -176,6 +187,7 @@ def build_scopus(tiers, exclusions, warnings=None, broad=True):
 
 
 IEEE_MAX_SEARCH_TERMS = 25
+IEEE_MAX_WILDCARDS = 10
 
 
 def _ieee_clean_terms(terms):
@@ -191,16 +203,22 @@ def _ieee_clean_terms(terms):
 
 
 def _ieee_tiers(tiers):
+    t1, t2, t3 = _search_tiers(tiers)
     return (
-        _ieee_clean_terms(_tier(tiers, "tier1_species_object", "tier1")),
-        _ieee_clean_terms(_tier(tiers, "tier2_technology_method", "tier2")),
-        _ieee_clean_terms(_tier(tiers, "tier3_application_task", "tier3")),
+        _ieee_clean_terms(t1),
+        _ieee_clean_terms(t2),
+        _ieee_clean_terms(t3),
     )
 
 
 def _ieee_quote(term):
-    value = str(term).strip()
+    """Format one IEEE value without disabling stemming for simple words."""
+    value = re.sub(r"\s+", " ", str(term).strip())
     if value.startswith('"') and value.endswith('"'):
+        return value
+    if '"' in value:
+        raise ValueError(f"IEEE search term contains an unmatched quote: {term!r}")
+    if re.fullmatch(r"[A-Za-z0-9*?]+", value):
         return value
     return f'"{value}"'
 
@@ -214,55 +232,78 @@ def _ieee_group(terms, field=None):
     return f"({' OR '.join(values)})" if values else ""
 
 
+def _ieee_clause_term_counts(query):
+    """Count consecutive terms in each clause, as defined by IEEE Search Tips.
+
+    Boolean/proximity operators end a clause. Words inside an exact phrase are
+    counted conservatively as consecutive terms; field names do not count.
+    """
+    token_re = re.compile(
+        r'"[^"\r\n]+"\s*:|"[^"\r\n]*"|'
+        r'\bONEAR/\d+\b|\bNEAR/\d+\b|\bAND\b|\bOR\b|\bNOT\b|[()]|[^\s()]+',
+        re.IGNORECASE,
+    )
+    counts = []
+    current = 0
+    for token in token_re.findall(query or ""):
+        upper = token.upper()
+        if upper in {"AND", "OR", "NOT"} or re.fullmatch(
+            r"(?:NEAR|ONEAR)/\d+", upper
+        ):
+            if current:
+                counts.append(current)
+                current = 0
+            continue
+        if token in {"(", ")"} or re.fullmatch(r'"[^"\r\n]+"\s*:', token):
+            continue
+        value = token[1:-1] if token.startswith('"') and token.endswith('"') else token
+        current += len(re.findall(r"[A-Za-z0-9*?]+", value))
+    if current:
+        counts.append(current)
+    return counts
+
+
 def _ieee_query_term_count(query):
-    """按 Command Search 的 keyword/quoted-phrase value 统计 search terms。"""
-    without_fields = re.sub(r'"[^"\r\n]+"\s*:', "", query or "")
-    quoted = re.findall(r'"[^"\r\n]*"', without_fields)
-    remainder = re.sub(r'"[^"\r\n]*"', " ", without_fields)
-    tokens = re.findall(r"[A-Za-z0-9*?]+(?:-[A-Za-z0-9*?]+)*", remainder)
-    operators = {"AND", "OR", "NOT", "NEAR", "ONEAR"}
-    bare_terms = [t for t in tokens if t.upper() not in operators and not t.isdigit()]
-    return len(quoted) + len(bare_terms)
+    """Backward-compatible helper returning the largest IEEE search clause."""
+    counts = _ieee_clause_term_counts(query)
+    return max(counts, default=0)
 
 
-def _ieee_chunks(values, size):
-    return [values[i:i + size] for i in range(0, len(values), size)] or [[]]
+def _ieee_validate_query(query):
+    """Validate official Command Search constraints used by the generator."""
+    if query.count('"') % 2:
+        raise ValueError("IEEE query has unbalanced quotation marks")
+    if query.count("(") != query.count(")"):
+        raise ValueError("IEEE query has unbalanced parentheses")
+    if re.search(r'"[^"\r\n]+"\s*:\s*\(', query):
+        raise ValueError("IEEE field names cannot directly contain a parenthesized OR group")
+    counts = _ieee_clause_term_counts(query)
+    if any(count > IEEE_MAX_SEARCH_TERMS for count in counts):
+        raise ValueError("IEEE query contains a search clause over the 25-term limit")
+
+    wildcard_count = query.count("*") + query.count("?")
+    if wildcard_count > IEEE_MAX_WILDCARDS:
+        raise ValueError("IEEE query exceeds the 10-wildcard limit")
+    for prefix in re.findall(r"(?<![A-Za-z0-9])([A-Za-z0-9]*)(?=[*?])", query):
+        if len(prefix) < 3:
+            raise ValueError("IEEE wildcards require at least three preceding characters")
+    return query
 
 
 def _ieee_split_queries(group_specs, exclusions, warnings=None):
-    """按 25-term 上限拆分查询；group_specs 为 (terms, optional_field) 列表。"""
+    """Build one complete query and validate each IEEE search clause."""
     groups = [(_ieee_clean_terms(terms), field)
               for terms, field in group_specs if _ieee_clean_terms(terms)]
     if not groups:
         return []
 
     ex_terms = _guard_exclusions(exclusions, warnings, "ieee", allow_cjk=False)
-    omitted = []
-    while ex_terms:
-        ex_count = _ieee_query_term_count(_fmt_excl_terms(ex_terms))
-        if ex_count + len(groups) <= IEEE_MAX_SEARCH_TERMS:
-            break
-        omitted.insert(0, ex_terms.pop())
-    if omitted and warnings is not None:
-        warnings.append(("ieee", [f"term limit: exclusion omitted: {x}" for x in omitted]))
-
     exclusion_query = _fmt_excl_terms(ex_terms)
-    exclusion_count = _ieee_query_term_count(exclusion_query)
-    available = IEEE_MAX_SEARCH_TERMS - exclusion_count
-    chunk_size = max(1, available // len(groups))
-    chunk_sets = [_ieee_chunks(terms, chunk_size) for terms, _ in groups]
-
-    queries = []
-    for selected in product(*chunk_sets):
-        parts = [_ieee_group(chunk, groups[i][1]) for i, chunk in enumerate(selected)]
-        query = " AND ".join(part for part in parts if part)
-        if exclusion_query:
-            query += f" NOT ({exclusion_query})"
-        if _ieee_query_term_count(query) > IEEE_MAX_SEARCH_TERMS:
-            raise ValueError("internal error: IEEE query exceeds the 25-term limit")
-        if query not in queries:
-            queries.append(query)
-    return queries
+    parts = [_ieee_group(terms, field) for terms, field in groups]
+    query = " AND ".join(part for part in parts if part)
+    if exclusion_query:
+        query += f" NOT ({exclusion_query})"
+    return [_ieee_validate_query(query)]
 
 
 def _ieee_core_queries(tiers, exclusions, warnings=None, field=None):
@@ -272,7 +313,7 @@ def _ieee_core_queries(tiers, exclusions, warnings=None, field=None):
 
 
 def build_ieee(tiers, exclusions, warnings=None, broad=True):
-    """生成单条向后兼容 IEEE 查询；完整拆分集合由 generate_variants 输出。"""
+    """Generate one complete IEEE query; validate official clause constraints."""
     field = None if broad else "Document Title"
     queries = _ieee_core_queries(tiers, exclusions, warnings, field)
     return queries[0] if queries else ""
@@ -287,40 +328,18 @@ def _ieee_add_variants(rows, code, label, queries):
 
 
 def _ieee_proximity_queries(tiers, exclusions):
-    t1, t2, _ = _ieee_tiers(tiers)
-    pairs = []
-    for term in t2:
-        words = re.findall(r"[A-Za-z0-9*?]+(?:-[A-Za-z0-9*?]+)*", term)
-        if len(words) >= 2:
-            pairs.append((words[0], words[-1]))
-    if not t1 or not pairs:
+    t1, t2, t3 = _ieee_tiers(tiers)
+    if not t2 or not t3:
         return []
 
     ex_terms = _guard_exclusions(exclusions, None, "ieee", allow_cjk=False)
     exclusion_query = _fmt_excl_terms(ex_terms)
-    domain = list(t1)
-    clauses = []
-    for left, right in pairs:
-        candidate = clauses + [f"({left} NEAR/3 {right})"]
-        query = f"{_ieee_group(domain)} AND ({' OR '.join(candidate)})"
-        if exclusion_query:
-            query += f" NOT ({exclusion_query})"
-        while domain and _ieee_query_term_count(query) > IEEE_MAX_SEARCH_TERMS:
-            domain.pop()
-            query = f"{_ieee_group(domain)} AND ({' OR '.join(candidate)})"
-            if exclusion_query:
-                query += f" NOT ({exclusion_query})"
-        if not domain or _ieee_query_term_count(query) > IEEE_MAX_SEARCH_TERMS:
-            break
-        clauses = candidate
-
-    if not clauses:
-        return []
-    base = f"{_ieee_group(domain)} AND ({' OR '.join(clauses)})"
+    proximity = f"({_ieee_group(t2)} NEAR/10 {_ieee_group(t3)})"
+    base = f"{_ieee_group(t1)} AND {proximity}" if t1 else proximity
     if exclusion_query:
         base += f" NOT ({exclusion_query})"
-    ordered = base.replace(" NEAR/3 ", " ONEAR/3 ")
-    return [base, ordered]
+    ordered = base.replace(" NEAR/10 ", " ONEAR/10 ")
+    return [_ieee_validate_query(base), _ieee_validate_query(ordered)]
 
 
 def _ieee_variants(scope, tiers, exclusions, warnings):
@@ -386,37 +405,68 @@ def _gs_or_group(terms, max_len):
     return grp + ")"
 
 
-def _gs_variants(t1, t2, t3, exclusions, warnings):
-    """Google Scholar 专用 5 变体：受 256 字符硬上限约束，单条查询无法容纳全部词项，
-    故把技术/应用词项切分为互补的两半，保证 5 条彼此不同且共同覆盖 领域+技术+应用+综述。
-    """
-    domain_terms = [_gs_term(t) for t in t1 if str(t).strip()]
-    tech_terms = [_gs_term(t) for t in t2 if str(t).strip()]
-    app_terms = [_gs_term(t) for t in t3 if str(t).strip()]
-    dg = _gs_or_group(domain_terms, 256)
-    mid = lambda lst: (lst[: (len(lst) + 1) // 2], lst[(len(lst) + 1) // 2:])
-    tech_a, tech_b = mid(tech_terms)
-    app_a, app_b = mid(app_terms)
-    out = []
-    # 1) 宽泛：领域 + (技术前半 OR 应用前半)
-    ta = _gs_or_group(list(tech_a) + list(app_a), 256 - len(dg) - 1)
-    out.append(("broad", "宽泛检索（高召回·技术+应用抽样）", " ".join(x for x in (dg, ta) if x)))
-    # 2) 精准：领域 + (技术后半 OR 应用后半) —— 与 broad 互补，合起来覆盖全部
-    tb = _gs_or_group(list(tech_b) + list(app_b), 256 - len(dg) - 1)
-    out.append(("precise", "精准检索（技术+应用补充抽样）", " ".join(x for x in (dg, tb) if x)))
-    # 3) 技术视角：领域 + 全部技术词
-    tg = _gs_or_group(tech_terms, 256 - len(dg) - 1)
-    out.append(("angle_tech", "多角度·技术视角（全部技术词）", " ".join(x for x in (dg, tg) if x)))
-    # 4) 应用视角：领域 + 全部应用词
-    ag = _gs_or_group(app_terms, 256 - len(dg) - 1)
-    out.append(("angle_app", "多角度·应用视角（全部应用词）", " ".join(x for x in (dg, ag) if x)))
-    # 5) 综述导向：领域 + 技术前半 + intitle review/survey
-    rt = _gs_or_group(list(tech_a) + ["intitle:review", "intitle:survey"], 256 - len(dg) - 1)
-    out.append(("review", "多角度·综述导向（限定 review/survey）", " ".join(x for x in (dg, rt) if x)))
+def _gs_group_chunks(raw_terms, max_len):
+    """Split a synonym tier into complete parenthesized groups."""
+    terms = [_gs_term(t) for t in raw_terms if str(t).strip()]
+    if not terms:
+        return []
+    chunks, current = [], []
+    for term in terms:
+        candidate = current + [term]
+        if len(f"({' OR '.join(candidate)})") <= max_len:
+            current = candidate
+            continue
+        if not current:
+            raise ValueError(f"Google Scholar term exceeds group budget: {term}")
+        chunks.append(f"({' OR '.join(current)})")
+        current = [term]
+    if current:
+        chunks.append(f"({' OR '.join(current)})")
+    return chunks
+
+
+def _gs_search_a_queries(tiers):
+    """Return complementary Search A queries without silently dropping terms."""
+    t1, t2, t3 = _search_tiers(tiers)
+    group_sets = [
+        _gs_group_chunks(t1, 75),
+        _gs_group_chunks(t2, 90),
+        _gs_group_chunks(t3, 87),
+    ]
+    active = [groups for groups in group_sets if groups]
+    if not active:
+        return []
+    queries = [""]
+    for groups in active:
+        queries = [" ".join(p for p in (base, group) if p)
+                   for base in queries for group in groups]
+    if any(len(query) > 256 for query in queries):
+        raise ValueError("internal error: Google Scholar query exceeds 256 characters")
+    return list(dict.fromkeys(queries))
+
+
+def _gs_variants(tiers, exclusions, warnings):
+    """Generate complementary, anchor-preserving Google Scholar queries."""
+    queries = _gs_search_a_queries(tiers)
+    total = len(queries)
+    rows = []
+    for index, query in enumerate(queries, 1):
+        suffix = f"_{index}" if total > 1 else ""
+        label = f"宽泛互补检索 {index}/{total}" if total > 1 else "宽泛检索"
+        rows.append({"variant": f"broad{suffix}", "label": label, "query": query})
+    if queries:
+        for kind in ("review", "survey"):
+            candidate = f"{queries[0]} intitle:{kind}"
+            if len(candidate) <= 256:
+                rows.append({
+                    "variant": f"review_{kind}",
+                    "label": f"综述导向（标题含 {kind}）",
+                    "query": candidate,
+                })
     if exclusions and warnings is not None:
         warnings.append(("google_scholar",
-                         ["exclusions omitted (256-char limit); apply via Scholar UI or other DBs"]))
-    return [{"variant": v[0], "label": v[1], "query": v[2]} for v in out]
+                         ["exclusions omitted to preserve all three core concepts"]))
+    return rows
 
 
 def build_google_scholar(tiers, exclusions, warnings=None, broad=True):
@@ -427,24 +477,18 @@ def build_google_scholar(tiers, exclusions, warnings=None, broad=True):
         intitle: 限定标题词；AROUND(n) 邻近检索。
       - 查询长度硬上限 256 字符（超出被截断！），故须精简。
     修复点：
-      1) 旧代码把 tier1 全部短语用空格 AND 连接（"a" "b" "c" 全须命中）→ 极窄，仅 ~15 条。
-         改为：领域层(tier1) 用 OR 组合，技术+应用层(tier2+tier3) 用 OR 组合，空格 AND。
+      1) 三类概念组之间使用空格（隐式 AND），组内同义词使用 OR。
       2) 单字关键词不加引号（省字符）；排除串过长（易超 256），对 Scholar 省略排除，
          改由用户在 Scholar 界面或下游数据库过滤（已在 warnings 提示）。
       3) 用 _gs_or_group 逐词累加构造，严格控制在 256 字符内且括号/引号始终平衡。
     """
-    t1 = tiers.get("tier1_species_object", []) or tiers.get("tier1", [])
-    t2 = tiers.get("tier2_technology_method", []) or tiers.get("tier2", [])
-    t3 = tiers.get("tier3_application_task", []) or tiers.get("tier3", [])
+    t1, t2, t3 = _search_tiers(tiers)
     domain_terms = [_gs_term(t) for t in t1 if str(t).strip()]
     tech_terms = [_gs_term(t) for t in t2 if str(t).strip()]
     app_terms = [_gs_term(t) for t in t3 if str(t).strip()]
     if broad:
-        domain_grp = _gs_or_group(domain_terms, 256)
-        ta_terms = tech_terms + app_terms
-        budget = 256 - len(domain_grp) - 1  # 留空格
-        ta_grp = _gs_or_group(ta_terms, budget) if budget > 0 else ""
-        base = " ".join(p for p in (domain_grp, ta_grp) if p)
+        queries = _gs_search_a_queries(tiers)
+        base = queries[0] if queries else ""
     else:
         # precise：领域 AND 技术 AND 应用（三层各自成 OR 组）
         domain_grp = _gs_or_group(domain_terms, 256)
@@ -454,12 +498,10 @@ def build_google_scholar(tiers, exclusions, warnings=None, broad=True):
         app_grp = _gs_or_group(app_terms, budget3) if budget3 > 0 else ""
         base = " ".join(p for p in (domain_grp, tech_grp, app_grp) if p)
     q = base
-    if len(q) > 256:
-        q = q[:256]
     # Scholar 256 上限：排除串过长，省略排除（用户可在 UI 过滤；已提示）
     if exclusions and warnings is not None:
         warnings.append(("google_scholar",
-                         ["exclusions omitted (256-char limit); apply via Scholar UI or other DBs"]))
+                         ["exclusions omitted to preserve all three core concepts"]))
     return q
 
 
@@ -467,31 +509,39 @@ def build_cnki(tiers, exclusions, warnings=None, broad=True):
     def su_or(terms):
         joined = " OR ".join(f"SU='{t}'" for t in terms)
         return f"({joined})" if len(terms) > 1 else joined
-    g1 = su_or(tiers.get("tier1_species_object", []) or tiers.get("tier1", []))
-    g2 = su_or(tiers.get("tier2_technology_method", []) or tiers.get("tier2", []))
-    g3 = su_or(tiers.get("tier3_application_task", []) or tiers.get("tier3", []))
+    t1, t2, t3 = _search_tiers(tiers)
+    g1 = su_or(t1)
+    g2 = su_or(t2)
+    g3 = su_or(t3)
     groups = [g for g in (g1, g2, g3) if g]
-    core = f"{groups[0]} AND ({' OR '.join(groups[1:])})" if broad and len(groups) >= 2 \
-           else " AND ".join(groups)
-    for e in exclusions:  # 中文库，保留中文排除词
-        if str(e).strip():
-            core += f" AND NOT SU='{e.strip()}'"
+    core = " AND ".join(groups)
+    ex_terms = [f"SU='{str(e).strip()}'" for e in exclusions if str(e).strip()]
+    if ex_terms:
+        core += f" NOT ({' OR '.join(ex_terms)})"
     return core
 
 
 def build_wanfang(tiers, exclusions, warnings=None, broad=True):
-    def zw_or(terms):
-        joined = " OR ".join(f'主题:("{t}")' for t in terms)
-        return f"({joined})" if len(terms) > 1 else joined
-    g1 = zw_or(tiers.get("tier1_species_object", []) or tiers.get("tier1", []))
-    g2 = zw_or(tiers.get("tier2_technology_method", []) or tiers.get("tier2", []))
-    g3 = zw_or(tiers.get("tier3_application_task", []) or tiers.get("tier3", []))
+    def wf_term(term):
+        value = str(term).strip()
+        return f'"{value}"' if re.search(r"\s|[()]", value) else value
+
+    def wf_or(terms):
+        values = [wf_term(t) for t in terms if str(t).strip()]
+        joined = " OR ".join(values)
+        return f"({joined})" if len(values) > 1 else joined
+
+    t1, t2, t3 = _search_tiers(tiers)
+    g1 = wf_or(t1)
+    g2 = wf_or(t2)
+    g3 = wf_or(t3)
     groups = [g for g in (g1, g2, g3) if g]
-    core = f"{groups[0]} AND ({' OR '.join(groups[1:])})" if broad and len(groups) >= 2 \
-           else " AND ".join(groups)
-    for e in exclusions:  # 中文库，保留中文排除词
-        if str(e).strip():
-            core += f' AND NOT 主题:("{e.strip()}")'
+    core = " AND ".join(groups)
+    ex_terms = [wf_term(e) for e in exclusions if str(e).strip()]
+    if ex_terms:
+        core += f" NOT ({' OR '.join(ex_terms)})"
+    if len(core) > 800:
+        raise ValueError("Wanfang Professional Search expression exceeds 800 characters")
     return core
 
 
@@ -524,15 +574,30 @@ def _chinese_enabled(value):
 
 
 def generate(scope, platforms=None, warnings=None):
-    """返回 {platform: query_string}（单条宽泛式，向后兼容）。warnings 收集排除项告警。"""
+    """Return Search A queries; Scholar uses a complementary query list."""
     tiers = scope.get("keyword_tiers", {})
     exclusions = scope.get("explicit_exclusions", [])
+    zh_tiers = scope.get("keyword_tiers_zh") or tiers
+    zh_exclusions = scope.get("explicit_exclusions_zh") or exclusions
     if platforms is None:
         platforms = list(BUILDERS.keys())
     out = {}
     for p in platforms:
         if p in BUILDERS:
-            out[p] = BUILDERS[p](tiers, exclusions, warnings)
+            platform_tiers = zh_tiers if p in {"cnki", "wanfang"} else tiers
+            platform_exclusions = zh_exclusions if p in {"cnki", "wanfang"} else exclusions
+            if p in {"cnki", "wanfang"} and not scope.get("keyword_tiers_zh") \
+                    and warnings is not None:
+                warnings.append((p, ["keyword_tiers_zh missing; using primary-language tiers"]))
+            if p == "google_scholar":
+                out[p] = _gs_search_a_queries(platform_tiers)
+                if platform_exclusions and warnings is not None:
+                    warnings.append((
+                        "google_scholar",
+                        ["exclusions omitted to preserve all three core concepts"],
+                    ))
+            else:
+                out[p] = BUILDERS[p](platform_tiers, platform_exclusions, warnings)
     return out
 
 
@@ -544,15 +609,37 @@ _REVIEW_SUFFIX = {
     "ieee": ' AND ("review" OR "survey")',
     "google_scholar": ' (intitle:review OR intitle:survey)',
     "cnki": " AND (SU='综述' OR SU='survey')",
-    "wanfang": ' AND (主题:("综述" OR "survey"))',
+    "wanfang": ' AND (综述 OR survey)',
 }
 
 
+def _build_review_query(platform, builder, tiers, exclusions, suffix):
+    """Place review criteria before the platform's final exclusion clause."""
+    query = builder(tiers, [], None) + suffix
+    if not exclusions:
+        return query
+    if platform == "wos":
+        terms = _guard_exclusions(exclusions, None, "wos", allow_cjk=False)
+        return query + (f" NOT TS=({_fmt_excl_terms(terms)})" if terms else "")
+    if platform == "scopus":
+        terms = _guard_exclusions(exclusions, None, "scopus", allow_cjk=False)
+        return query + (
+            f" AND NOT TITLE-ABS-KEY({_fmt_excl_terms(terms)})" if terms else ""
+        )
+    if platform == "cnki":
+        terms = [f"SU='{str(term).strip()}'" for term in exclusions if str(term).strip()]
+        return query + (f" NOT ({' OR '.join(terms)})" if terms else "")
+    if platform == "wanfang":
+        terms = [str(term).strip() for term in exclusions if str(term).strip()]
+        return query + (f" NOT ({' OR '.join(terms)})" if terms else "")
+    return query
+
+
 def generate_variants(scope, platforms=None, warnings=None):
-    """生成平台专属检索式组合；IEEE 会按官方 term 上限拆分。
+    """生成平台专属检索式组合；IEEE 按官方 search-clause 上限校验。
 
     返回结构：{platform: [ {"variant","label","query"}, ... ]}
-      - broad      : 宽泛检索（高召回）—— 领域层 AND (技术层 OR 应用层)
+      - broad      : 宽泛检索（高召回）—— 领域层 AND 必需技术锚点 AND 应用层
       - precise    : 精准检索（高精确）—— 三层全 AND（broad=False）
       - angle_tech : 多角度·技术视角 —— 仅 领域层 + 技术层
       - angle_app  : 多角度·应用视角 —— 仅 领域层 + 应用层
@@ -561,21 +648,25 @@ def generate_variants(scope, platforms=None, warnings=None):
     """
     tiers = scope.get("keyword_tiers", {})
     exclusions = scope.get("explicit_exclusions", [])
+    zh_tiers = scope.get("keyword_tiers_zh") or tiers
+    zh_exclusions = scope.get("explicit_exclusions_zh") or exclusions
     if platforms is None:
         platforms = list(BUILDERS.keys())
-    t1 = tiers.get("tier1_species_object", []) or tiers.get("tier1", [])
-    t2 = tiers.get("tier2_technology_method", []) or tiers.get("tier2", [])
-    t3 = tiers.get("tier3_application_task", []) or tiers.get("tier3", [])
     out = {}
     for p in platforms:
         if p not in BUILDERS:
             continue
+        platform_tiers = zh_tiers if p in {"cnki", "wanfang"} else tiers
+        platform_exclusions = zh_exclusions if p in {"cnki", "wanfang"} else exclusions
+        pt1 = _tier(platform_tiers, "tier1_species_object", "tier1")
+        pt2 = _tier(platform_tiers, "tier2_technology_method", "tier2")
+        pt3 = _tier(platform_tiers, "tier3_application_task", "tier3")
         if p == "ieee":
-            out[p] = _ieee_variants(scope, tiers, exclusions, warnings)
+            out[p] = _ieee_variants(scope, platform_tiers, platform_exclusions, warnings)
             continue
-        # Google Scholar 受 256 字符硬上限约束，用专用互补切分生成 5 条不同变体
+        # Google Scholar 用互补列表覆盖全部任务词，每条保留三类核心概念。
         if p == "google_scholar":
-            out[p] = _gs_variants(t1, t2, t3, exclusions, warnings)
+            out[p] = _gs_variants(platform_tiers, platform_exclusions, warnings)
             continue
         b = BUILDERS[p]
         variants = []
@@ -583,44 +674,36 @@ def generate_variants(scope, platforms=None, warnings=None):
         variants.append({
             "variant": "broad",
             "label": "宽泛检索（高召回）",
-            "query": b(tiers, exclusions, warnings),
+            "query": b(platform_tiers, platform_exclusions, warnings),
         })
         # 2) 精准（三层全 AND）
         variants.append({
             "variant": "precise",
             "label": "精准检索（高精确）",
-            "query": b(tiers, exclusions, None, broad=False),
+            "query": b(platform_tiers, platform_exclusions, None, broad=False),
         })
         # 3) 技术视角（领域 + 技术）
-        if t2:
-            sub = {"tier1_species_object": t1, "tier2_technology_method": t2}
+        if pt2:
+            sub = {"tier1_species_object": pt1, "tier2_technology_method": pt2}
             variants.append({
                 "variant": "angle_tech",
                 "label": "多角度·技术视角（领域+技术）",
-                "query": b(sub, exclusions, None),
+                "query": b(sub, platform_exclusions, None),
             })
         # 4) 应用视角（领域 + 应用）
-        if t3:
-            sub = {"tier1_species_object": t1, "tier3_application_task": t3}
+        if pt3:
+            sub = {"tier1_species_object": pt1, "tier3_application_task": pt3}
             variants.append({
                 "variant": "angle_app",
                 "label": "多角度·应用视角（领域+应用）",
-                "query": b(sub, exclusions, None),
+                "query": b(sub, platform_exclusions, None),
             })
         # 5) 综述导向（宽泛式 + review 限定）
         rs = _REVIEW_SUFFIX.get(p, "")
         if rs:
-            if p == "google_scholar":
-                # Scholar 256 上限：把 review 词项并入 tech/app OR 组，增量构造保证 <=256
-                domain_terms = [_gs_term(t) for t in t1 if str(t).strip()]
-                ta_terms = [_gs_term(t) for t in (list(t2) + list(t3)) if str(t).strip()] \
-                           + ["intitle:review", "intitle:survey"]
-                dg = _gs_or_group(domain_terms, 256)
-                budget = 256 - len(dg) - 1
-                taq = _gs_or_group(ta_terms, budget) if budget > 0 else ""
-                rev_q = dg + (" " + taq if taq else "")
-            else:
-                rev_q = b(tiers, exclusions, None) + rs
+            rev_q = _build_review_query(
+                p, b, platform_tiers, platform_exclusions, rs
+            )
             variants.append({
                 "variant": "review",
                 "label": "多角度·综述导向（限定 review/survey）",
@@ -647,7 +730,7 @@ def main():
     ap.add_argument("--platforms", nargs="+", help="指定平台 (wos scopus ieee google_scholar cnki wanfang)")
     ap.add_argument("--all", action="store_true", help="生成全部 6 个平台")
     ap.add_argument("--variants", action="store_true",
-                    help="生成平台专属分层检索式组合（IEEE 自动拆分并含邻近检索）")
+                    help="生成平台专属分层检索式组合（IEEE 含 clause 校验与邻近检索）")
     ap.add_argument("--package", action="store_true",
                     help="输出 context + queries 包，保留写作类型、时间跨度和平台启用信息")
     ap.add_argument("--writing-type", help="写作类型，用于标注查全/查准/新颖性权重")
@@ -657,6 +740,10 @@ def main():
                     help="是否启用 CNKI + Wanfang；未指定时读取 scope.project_config/config")
     ap.add_argument("--t1", nargs="*", default=[], help="tier1 关键词")
     ap.add_argument("--t2", nargs="*", default=[], help="tier2 关键词")
+    ap.add_argument("--anchor", nargs="*", default=[],
+                    help="Search A 必需技术锚点；未给出时使用完整 tier2")
+    ap.add_argument("--method", nargs="*", default=[],
+                    help="补充方法词，不替代 Search A 的必需技术锚点")
     ap.add_argument("--t3", nargs="*", default=[], help="tier3 关键词")
     ap.add_argument("--ex", nargs="*", default=[], help="排除项")
     args = ap.parse_args()
@@ -664,11 +751,13 @@ def main():
     if args.scope:
         with open(args.scope, encoding="utf-8") as f:
             scope = json.load(f)
-    elif args.t1 or args.t2 or args.t3 or args.ex:
+    elif args.t1 or args.t2 or args.anchor or args.method or args.t3 or args.ex:
         scope = {
             "keyword_tiers": {
                 "tier1_species_object": args.t1,
                 "tier2_technology_method": args.t2,
+                "tier2_required_anchor": args.anchor,
+                "tier2_supporting_method": args.method,
                 "tier3_application_task": args.t3,
             },
             "explicit_exclusions": args.ex,

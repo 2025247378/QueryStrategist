@@ -1,10 +1,10 @@
 ---
 name: wos_query_crafter
-description: "WoS检索式构建器 | 将三层关键词转化为Web of Science高级检索语法（默认 TS=() 包裹显式主题字段检索；年份用结果页左侧 Publication Year 过滤器，不在式中写 PY=），产出广泛检索式A（高召回率）+ 精准检索式B（高精确率，SAME 同句共现），含截词、邻近算符 NEAR/PRE、字段标识优化。QueryStrategist — Search Strategist 子模块 Search A。 Use this skill for Web of Science advanced search query building tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
+description: "WoS检索式构建器 | 将三层关键词转化为Web of Science高级检索语法（默认 TS=() 包裹显式主题字段检索；年份用结果页左侧 Publication Year 过滤器，不在式中写 PY=），产出广泛检索式A（高召回率）+ 精准检索式B（高精确率，NEAR/x 邻近共现），含截词、邻近算符 NEAR、字段标识优化。QueryStrategist — Search Strategist 子模块 Search A。 Use this skill for Web of Science advanced search query building tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.2
+  version: 1.3
   keywords: [Web of Science, search query, bibliographic, QueryStrategist]
   triggers: [WoS, web of science, 检索式]
 ---
@@ -23,7 +23,10 @@ metadata:
 **QueryStrategist** 工作流 — Search Strategist 的子模块（Search A）
 
 ## 版本
-V1.1
+V1.3
+
+## 变更记录
+- **V1.3 (2026-08-11)**：按 Web of Science 当前官方帮助中心修正 Search A 为三概念强制共现；单词默认不加引号以保留 lemmatization/stemming，多词固定短语才加引号；纠正 `SAME` 仅用于 Address 检索，Topic 精准共现改用 `NEAR/x`。
 
 ## 目标
 将用户的研究方向（来自 Scope Definer 的三层关键词）转化为符合 Web of Science 高级检索语法的精准检索式，确保文献检索的准确性、可复现性和高相关性。
@@ -66,8 +69,8 @@ V1.1
    - 例：`NOT (occlusion OR weather)`
    - **排除项必须是英文**（英文数据库铁律）：WoS 无法匹配中文/非 ASCII 字符，直接把 scope 里的中文排除描述（如「非视觉投喂法（声学、RFID、称重等）」）塞进 `TS=()` 会原样搜索该中文字符串 → 0 命中 → 排除完全失效，且全角括号 `（）` 属脏字符。必须把中文描述翻译为英文等价检索片段（如「非视觉投喂法」→ `acoustic* OR RFID OR "weighing" OR "load cell"`），多个排除概念合并进**单个** `NOT TS=(... OR ...)`。
    - **多个 `NOT` 必须合并为单个 `NOT (A OR B OR C)`**：避免 `(NOT A)(NOT B)` 依赖优先级带来的歧义。
-4. **提高相关性**：使用 `SAME` 替代 `AND`，要求检索词出现在同一个句子中（在 WoS 中指标题、摘要或关键词字段的一个句子）。这能大幅减少不相关文献。
-   - 例：`(autonomous vehicle SAME "computer vision")` 比 `(autonomous vehicle AND "computer vision")` 更精准
+4. **提高相关性**：Topic 检索使用 `NEAR/x` 控制词距。Web of Science 当前官方规则中，`SAME` 用于 Address 检索，不能解释为 Topic 的“同句共现”。
+   - 例：`TS=((autonomous vehicle OR "self-driving car") NEAR/10 ("computer vision" OR "deep learning"))`
 
 ### Step 3：应用截词符
 对需要匹配不同词尾变体的关键词，使用截词符：
@@ -84,12 +87,11 @@ V1.1
 1. **NEAR/n**：两个检索词之间间隔 0～n 个单词，前后位置可以颠倒。
    - 例：`carbon NEAR/5 nanotube` → "carbon" 和 "nanotube" 之间不超过 5 个单词
    - 默认：`NEAR` 等同于 `NEAR/15`
-2. **PRE/n**：与 NEAR 相同，但要求词序固定，前后位置不可颠倒。
-   - 例：`"machine" PRE/2 "learning"` → machine 必须在 learning 前面，且不超过 2 个单词
+2. 当前 Web of Science 官方 Search Operators 列表不包含 `PRE/n`；不要把 Scopus 的 `PRE/n` 或 IEEE 的 `ONEAR/n` 混入 WoS 查询。
 
 ### Step 5：短语精确检索
 对固定短语，使用双引号进行精确检索：
-1. 多词固定短语必须用引号括住。
+1. 多词固定短语必须用引号括住；普通单词默认不加引号，以保留 WoS 自动词形还原、英美拼写扩展和内部同义词扩展。
    - 例：`"computer vision"`, `"deep learning"`, `"autonomous driving"`
 2. 用连字符、句号或逗号分隔的两个单词，WoS 自动视为精确短语。
 
@@ -115,8 +117,8 @@ WoS 中逻辑算符的优先级如下：
 
 ### Step 8：输出最终检索式
 向用户输出以下内容：
-1. **检索式 A：广泛检索（高召回率，默认宽口径）** — 采用「**领域层（Tier1）必选 `AND` （技术层 Tier2 `OR` 应用层 Tier3）**」结构：即强制命中领域层，再放宽到「技术层或应用层任一命中即可」，不要求三层同时命中，以最大化查全率。领域/技术/应用各层内部同义词用 `OR` 连接。脚本化生成器（`query_generator.py`）默认 `broad=True` 即产出此结构。用户将**自行**把此式粘贴进 WoS 高级检索框检索并下载全文 PDF。
-2. **检索式 B：精准检索（高精确率）** — 用 `SAME` 替代 `AND` 要求同句共现，且三层均强制命中（`T1 SAME (T2 SAME T3)`），适合筛选核心文献。脚本化生成器传 `broad=False` 产出此结构。可用作用户下载后的二次精筛参考，但**不**用于替代用户的人工检索式 A。
+1. **检索式 A：广泛检索（高召回率）** — 采用「**领域层 AND 必需技术锚点 AND 应用层**」结构；三类概念必须同时出现，各层内部同义词用 `OR` 扩展。若 Scope 提供 `tier2_required_anchor`，Search A 只把该组作为必需技术概念，机器学习等支持方法进入补充视角。
+2. **检索式 B：精准检索（高精确率）** — 三层继续强制命中，并可用 `NEAR/x` 收紧技术与任务的词距。不要在 Topic 检索中使用 Address 专用的 `SAME`。
 3. **年份处理**：**不在检索式中写 `PY=`**，统一用结果页左侧 Publication Year 过滤器。
 4. **使用说明**：简要说明如何复制到 WoS 高级检索框、如何调整、如何排序结果。
 
@@ -129,21 +131,21 @@ WoS 中逻辑算符的优先级如下：
 
 **检索式 A（广泛检索 — 高召回率，宽口径）**
 `
-TS=([Tier1 领域层 OR 组合]) AND (TS=([Tier2 技术层 OR 组合]) OR TS=([Tier3 应用层 OR 组合]))
+TS=([Tier1 领域层 OR 组合]) AND TS=([Tier2 必需技术锚点 OR 组合]) AND TS=([Tier3 应用层 OR 组合])
 `
-*说明*：**领域层（Tier1）强制命中，技术层与应用层用 `OR` 放宽**——命中领域层后再命中任一技术/应用词即召回，不要求三层同时命中，以最大化查全率。年份不写 `PY=`（见 §3），排除项合并进单个 `NOT TS=(... OR ...)`（英文，见 Step 2-3）。用户将**自行**粘贴此式到 WoS 检索并下载全文。
+*说明*：三类概念强制共现，同义词只在各层内部用 `OR` 放宽。年份不写 `PY=`（见 §3），排除项合并进单个 `NOT TS=(... OR ...)`。
 *示例*（脚本化生成器 `broad=True` 默认产出；TS= 为规范形式）：
 `
-TS=("autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND (TS=("computer vision" OR "machine vision" OR "deep learning" OR CNN OR "neural network") OR TS=("lane detection" OR "pedestrian detection" OR "trajectory prediction" OR "object tracking" OR "semantic segmentat*")) NOT TS=("occlusion" OR "weather" OR "camera failure")
+TS=("autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND TS=("computer vision" OR "machine vision" OR "deep learning" OR CNN OR "neural network") AND TS=("lane detection" OR "pedestrian detection" OR "trajectory prediction" OR "object tracking" OR "semantic segmentat*") NOT TS=(occlusion OR weather OR "camera failure")
 `
 
 **检索式 B（精准检索 — 高精确率）**
 `
-([Tier1关键词OR组合]) SAME ([Tier2关键词OR组合] SAME ([Tier3关键词OR组合]))
+TS=([Tier1关键词OR组合]) AND TS=(([Tier2关键词OR组合]) NEAR/10 ([Tier3关键词OR组合]))
 `
 *示例*：
 `
-(autonomous vehicle OR self-driving car) SAME ("computer vision" SAME ("trajectory prediction" OR "semantic segmentat*" OR "collision avoidance"))
+TS=("autonomous vehicle" OR "self-driving car") AND TS=(("computer vision" OR "deep learning") NEAR/10 ("trajectory prediction" OR "semantic segmentat*" OR "collision avoidance"))
 `
 
 ### 3. 可选限定
@@ -164,7 +166,7 @@ TS=("autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electr
 2. **短语必须加引号**：如 `"computer vision"`, `"deep learning"`, `"autonomous driving"`（多词短语用一对双引号，WoS 默认识别；不要用两对引号）。
 3. **截词词干不能太短**：避免 `pig*` 匹配到 pigment。如有歧义，改用引号精确短语。
 4. **不确定优先级时，多加括号**：确保检索式逻辑正确。
-5. **SAME 优于 AND**：在需要提高相关性时，优先使用 `SAME` 连接关键词。但 `SAME` 可能过于严格，如结果太少，回退到 `AND`。
+5. **SAME 仅用于 Address**：Topic 检索提高相关性时使用 `NEAR/x`，不要把 `SAME` 当成标题/摘要的同句算符。
 6. **不做模糊匹配**：不接受近义词的"大概匹配"。WoS 不提供语义检索，所有检索必须基于用户给定的关键词。
 7. **不编造检索词**：所有检索词必须基于用户输入。不自行添加未经用户确认的关键词。
 
@@ -183,12 +185,12 @@ TS=("autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electr
 
 **检索式 A（广泛检索 — 宽口径，高召回）**
 `
-TS=("ego vehicle" OR "autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND (TS=("computer vision" OR "machine vision" OR "deep learning" OR CNN OR "neural network" OR "object detection" OR "image segmentation") OR TS=("lane detection" OR "pedestrian detection" OR "trajectory prediction" OR "object tracking" OR "semantic segmentat*" OR "anomaly detect*"))
+TS=("ego vehicle" OR "autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND TS=("computer vision" OR "machine vision" OR "deep learning" OR CNN OR "neural network" OR "object detection" OR "image segmentation") AND TS=("lane detection" OR "pedestrian detection" OR "trajectory prediction" OR "object tracking" OR "semantic segmentat*" OR "anomaly detect*")
 `
 
 **检索式 B（精准检索）**
 `
-(autonomous vehicle OR self-driving car) SAME ("computer vision" SAME ("trajectory prediction" OR "semantic segmentat*" OR "collision avoidance"))
+TS=("autonomous vehicle" OR "self-driving car") AND TS=(("computer vision" OR "deep learning") NEAR/10 ("trajectory prediction" OR "semantic segmentat*" OR "collision avoidance"))
 `
 
 ### 使用建议

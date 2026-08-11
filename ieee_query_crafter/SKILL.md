@@ -1,10 +1,10 @@
 ---
 name: ieee_query_crafter
-description: "IEEE Xplore检索式构建器 | 三层关键词→IEEE Xplore【Advanced Search 中的 Command Search】语法（完整字段名 \"Document Title\":/\"Abstract\": 等为可选限定符、布尔 AND/OR/NOT、邻近 NEAR/ONEAR、短语、通配符 * ?、每子句≤25 terms 自动拆分），产出宽泛查全A+高精度查准B+会议定向C+邻近检索D四套 Command Search 检索式。QueryStrategist子模块 Use this skill for IEEE Xplore (Advanced Search › Command Search) query building tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
+description: "IEEE Xplore检索式构建器 | 三层关键词→IEEE Xplore【Advanced Search 中的 Command Search】语法（完整字段名 \"Document Title\":/\"Abstract\": 等为可选限定符、布尔 AND/OR/NOT、邻近 NEAR/ONEAR、短语、通配符 * ?、每个 search clause≤25 terms），产出宽泛查全A+高精度查准B+会议定向C+邻近检索D四套 Command Search 检索式。QueryStrategist子模块 Use this skill for IEEE Xplore (Advanced Search › Command Search) query building tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.7
+  version: 1.8
   keywords: [IEEE Xplore, command search, search query, engineering, QueryStrategist]
   triggers: [IEEE, 检索式, 工程文献, IEEE Xplore, Command Search, command search]
 ---
@@ -23,9 +23,10 @@ metadata:
 This skill is part of the **QueryStrategist** workflow (Step 2). It is called by **Search Strategist V1** to generate platform-specific advanced search queries for IEEE Xplore. The queries are used by the user for manual retrieval of high-quality literature, primarily in computer science, electrical engineering, and related interdisciplinary fields.
 
 ## Version
-V1.7
+V1.8
 
 ## Change Log
+- **V1.8 (2026-08-11)**: 按 IEEE Xplore 当前官方 Search Tips 修正 25-term 口径：限制作用于“未被布尔运算符分隔的连续检索词”组成的 search clause，不再把整条查询的所有 OR 同义词累计后拆分；保留完整 Query A。单词默认不加引号以保留词干扩展，多词固定短语才加引号；补充每查询最多 10 个通配符及通配符前至少 3 个字符的校验；Query D 改为技术/方法层与应用/任务层的真正 NEAR/ONEAR 共现。
 - **V1.7 (2026-08-11)**: 与 `query_crafter/scripts/query_generator.py` 实现对齐：Query A 默认 All Metadata；Query B 逐项重复 `"Document Title":`；按 25 个 keyword/quoted-phrase values 自动拆分；条件生成 Query C；补齐 NEAR/ONEAR Query D 与自动化回归测试。
 - **V1.6 (2026-08-10)**: 对照 IEEE Xplore 官方 Command Search 帮助页（xplorestaging.ieee.org/Xplorehelp）修正语法口径——**字段名是可选限定符**（官方 Step 1：不写字段名则默认搜全部 metadata，运算符示例 `"wireless sensor network" AND security`、`implantable NEAR/3 cardiac` 均无字段名），不再强制"每个搜索词都带字段名"；保留官方明确禁止的写法（`"Document Title":("a" OR b)` 字段内括号 OR 无效）；Query A/D 模板改为官方风格（无字段名简洁写法 + 可选字段限定说明）；NEAR 用官方简单示例；25 terms 改官方原文口径。修正此前"逐词重复字段名"的过度泛化（V1.5），避免生成与官方风格脱节的查询。
 - **V1.5 (2026-08-10)**: 官网比对后修正 Command Search 语法——完整字段名列表、同字段 OR 禁止括号嵌套（需逐词重复字段名）、每子句 ≤25 terms、Command Search 无独立年份字段。**（注意：V1.5 将"同字段 OR 逐词重复字段名"过度泛化为"每个搜索词都必须带字段名"，与官方默认"无字段名=搜 metadata"矛盾，V1.6 已修正。）**
@@ -95,11 +96,13 @@ For exact-phrase matching, always quote the value: `"Document Title":"deep learn
 **C. Phrase Searching**
 - Enclose multi-word terms in double quotes for exact-phrase matching: `"deep learning"`, `"computer vision"`.
 - ⚠️ A value without quotes is treated as AND of its words: `"Document Title":web services` finds `web` AND `services`, not the phrase. Always quote phrases.
+- Exact quotes also suppress automatic stemming. Keep simple single-word concepts such as `fish`, `freshness`, and `protein` unquoted unless exact whole-word matching is intentional.
 
 **D. Wildcards**
 - `*` = multi-character truncation (`detect*` → detect, detects, detection, detector).
 - `?` = single-character wildcard.
 - Wildcards may appear inside quoted phrases and with proximity operators: `"radioloc*"` or `("neural net*" NEAR/3 "control")`.
+- 每条查询最多使用 10 个通配符；使用通配符前至少输入 3 个字符。查询生成器必须在输出前校验这两项。
 
 **E. Proximity Operators (Command Search only — unavailable in default structured advanced search)**
 - `NEAR/n`: the two expressions occur within `n` words of each other, in either order.
@@ -112,12 +115,12 @@ For exact-phrase matching, always quote the value: `"Document Title":"deep learn
 - The official IEEE Xplore Command Search field list has **no dedicated short year field**. Filter by year using the **left-side `Publication Year` filter** after running the query. Do NOT use a `"Publication Year":"2020"-"2025"` clause — it is not part of the official Command Search field list and may be rejected.
 
 **G. Limits & Constraints**
-- **Max 25 search terms per search clause**（官方原文："You can enter a maximum of 25 search terms per search clause"）。脚本按每个 keyword 或带引号的 phrase value 计 1 个 search term；字段名与 AND/OR/NOT/NEAR/ONEAR 不计入，并在输出前再次校验上限。
-- ⚠️ **Split broad queries to stay within 25 terms.** If your keyword tiers are large (e.g. a domain group of 4–5 terms plus a technology group of 4–5 terms plus an application group), a single query will exceed 25 terms. Split the application tier by sub-task (e.g. `broad_quality` / `broad_grading_online`) and/or trim each group greedily — never emit a query over 25 terms.
+- **Max 25 search terms per search clause**（官方原文："You can enter a maximum of 25 search terms per search clause"）。IEEE Search Tips 将 search clause 定义为 **consecutive search terms not separated by a Boolean operator**。因此 `A OR B OR C` 的 OR 会分隔 clause，不能把整条查询的所有同义词累计成一个 25-term 总预算。引号短语内部的连续单词按保守口径逐词检查；字段名和布尔/邻近运算符不计入。
+- ⚠️ **不要因整条查询含有超过 25 个 OR 同义词而拆分或丢词。** 仅当某个未被布尔运算符分隔的原子 clause 自身超过 25 个连续词时才报错，并要求改写该原子表达式。
 - **同字段内禁止括号嵌套 OR**（官方原文）：`"Document Title":("radio frequency identification" OR rfid)` **无效**；正确写法是逐词重复字段名再用外层括号分组：`("Document Title":"radio frequency identification" OR "Document Title":rfid) AND scheduling`。
 - **无字段名的裸词/裸短语合法**（官方默认搜全部 metadata，见 A 节）——`("fish" OR "whole fish") AND ("spectral imaging" OR "hyperspectral imaging")` 是**合法且符合官方风格**的写法，不必给每个词加字段名。
 - Search is **case-insensitive**.
-- Terms with non-alphanumeric characters (e.g. `plug-in`) should be treated as a phrase and quoted: `"plug-in"`.
+- IEEE Xplore ignores most punctuation; only `&`, `+`, and `/` are recognized as special characters. Quote a punctuated expression only when exact phrase behavior is intended, and replace punctuation with spaces when constructing an exact phrase as advised by Search Tips.
 
 **H. Official Reference Examples (verbatim from IEEE Xplore Search Tips)**
 IEEE Xplore 官方帮助文档给出的标准写法（逐字引用），印证本 skill 的格式规则——**字段名是可选限定符，两种写法都合法**：
@@ -166,7 +169,7 @@ Present the finalized search query in a clearly formatted text box that the user
 > 若误贴进结构化表单或默认检索框，会因语法不被识别而报错。本 skill 产出的全部检索式均为 **Command Search 检索词**。
 
 **Query A (Command Search): Broad Sensitivity Search (for maximum recall)**
-> 💡 官方默认风格：**不写字段名**（自动搜全部 metadata，见官方运算符示例）。若要进一步扩大覆盖，把 `"Abstract":` 限定替换为无字段名——两者等价于"搜 metadata"。若词数超 25，将应用层拆条。
+> 💡 官方默认风格：**不写字段名**（自动搜全部 metadata，见官方运算符示例）。`"Abstract":` 只检索摘要，覆盖范围小于 All Metadata，二者不等价。25-term 限制按单个 search clause 校验，不按整条查询累计 OR 同义词。
 ```
 ("[concept1]" OR "[synonym1]") AND ("[concept2]" OR "[synonym2]") AND ("[concept3]" OR "[synonym3]") NOT ("[excluded1]" OR "[excluded2]")
 ```
@@ -174,7 +177,7 @@ Present the finalized search query in a clearly formatted text box that the user
 ```
 ("fish" OR "aquaculture fish" OR "fish fillet" OR "whole fish") AND ("spectral imaging" OR "hyperspectral imaging" OR "multispectral imaging" OR "near-infrared imaging") AND ("quality assessment" OR "freshness" OR "spoilage" OR "adulteration") NOT ("chemical method" OR "fruit")
 ```
-*说明：领域 4 词 + 技术 4 词 + 应用 4 项 + 排除 2 项 = 14 个搜索词（字段名与运算符不计入）≤ 25。年份在结果页左侧 `Publication Year` 过滤。此写法与官方 AND/OR/NOT 示例（`"wireless sensor network" AND security`）风格一致。*
+*说明：OR/AND/NOT 会分隔 search clause；本例每个原子 clause 均远低于 25 个连续检索词。年份在结果页左侧 `Publication Year` 过滤。此写法与官方 AND/OR/NOT 示例（`"wireless sensor network" AND security`）风格一致。*
 
 **Query B (Command Search): High-Precision Core Search (for maximum specificity)**
 > 💡 高精度检索推荐加 `"Document Title":` 字段限定（官方明确支持）；每个 OR 项前带字段名（`"Document Title":("a" OR b)` 无效）。
@@ -200,11 +203,11 @@ Present the finalized search query in a clearly formatted text box that the user
 **Query D (Command Search): Proximity Search (NEAR/ONEAR — captures method–task co-occurrence within a tight window, command search only)**
 > 💡 官方 NEAR/ONEAR 示例为无字段名简单形式（`implantable NEAR/3 cardiac`）。若要给参与项加字段限定，每个 OR 项前重复字段名（禁止字段内括号 OR）。
 ```
-("[concept1]" OR "[synonym1]") NEAR/5 ("[concept2]" OR "[synonym2]")
+("[domain1]" OR "[domain2]") AND (("[method1]" OR "[method2]") NEAR/10 ("[task1]" OR "[task2]"))
 ```
 *Example:*
 ```
-("fish" OR "aquaculture fish") NEAR/10 ("spectral imaging" OR "hyperspectral imaging")
+(fish OR "aquaculture fish") AND (("spectral imaging" OR "hyperspectral imaging") NEAR/10 (freshness OR grading))
 ```
 *说明：NEAR/ONEAR 是 Command Search 专属（结构化检索不可用）。`NEAR` = 无序（两词任一先后均可），`ONEAR` = 有序（左项必须在前）；运算符全大写。参与项与 Query A 一样默认无字段名（官方示例风格）；需要精确限定再按 Query B 的格式加字段名。*
 
@@ -225,7 +228,7 @@ Present the finalized search query in a clearly formatted text box that the user
 - **Proximity operators** (`NEAR/n`, `ONEAR/n`) are **command-search only** — unavailable in the default structured advanced search. Operators must be ALL CAPS. Official simple form: `implantable NEAR/3 cardiac`.
 - **Operator precedence (no parentheses)**: `NEAR`/`ONEAR` > `NOT` > `AND` > `OR`. Always parenthesize mixed `OR`/`AND` groups, e.g. `(A OR B) AND (C OR D)`.
 - **Date**: no dedicated year field in the official Command Search field list — use the left-side `Publication Year` filter. Do NOT emit a `"Publication Year":` clause (not in the official field list).
-- **Limits**: ≤ 25 search terms per search clause (words inside a phrase count separately); search is case-insensitive; hyphenated terms quoted as phrases (`"plug-in"`).
+- **Limits**: ≤ 25 consecutive search terms per search clause; Boolean operators separate clauses. Do not apply 25 as a whole-query synonym limit. A query may contain at most 10 wildcards, and at least three characters must precede each wildcard. Search is case-insensitive.
 - **Author names**: try multiple formats — `"Authors":"LeCun, Y."` and `"Authors":"Yann LeCun"`.
 - IEEE Xplore is predominantly English IEEE / partner content. For broader coverage, run Scopus or Web of Science in parallel.
 - Generated queries are starting points — iterate: too few results → drop field restrictions (or remove `"Document Title":` to search all metadata); too many → add `"Document Title":` or `"Abstract":` restrictions or constrain `"Publication Title":`.

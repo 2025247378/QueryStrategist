@@ -4,7 +4,7 @@ description: "CNKI检索式构建器 | 中文关键词→中国知网高级检�
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.1
+  version: 1.2
   keywords: [CNKI, search query, Chinese literature, QueryStrategist]
   triggers: [CNKI, 知网, 中文检索式, 中文文献]
 ---
@@ -26,7 +26,10 @@ This skill is part of the **QueryStrategist** workflow (Step 2). It is invoked b
 CNKI Query Crafter
 
 ## Version
-V1.1
+V1.2
+
+## Change Log
+- **V1.2 (2026-08-11)**：总控生成器优先读取独立的 `keyword_tiers_zh` / `explicit_exclusions_zh`，避免把英文词表原样交给中文库；Search A 统一要求对象、必需技术锚点、任务三概念共现，各概念内部使用 OR 扩展。
 
 ## Description
 A specialized query generator for the CNKI platform. It translates a user's research scope into syntactically flawless CNKI advanced search queries. This skill strictly applies CNKI's specific logical operators (`*`, `+`, `-` in the single-box advanced search; `AND`/`OR`/`NOT` between fields in professional search), field codes (`SU=`, `TI=`, `KY=`, `AB=`, `FT=`, etc.), proximity operators (`/NEAR N`, `/PREV N`, `/AFT N`, `/SEN N`, `#`, `%`), and formatting rules (half-width characters, mandatory spaces) to ensure the query works correctly when pasted into the CNKI advanced or professional search interface.
@@ -39,6 +42,8 @@ The **Review Scope Confirmation Document** from Scope Definer, specifically the 
 - Whether to limit results to `Core Journals` (北大核心/CSSCI/CSCD).
 - A specific date range (e.g., 2020-2025).
 - Whether to search only `Thesis/Dissertation` or `Conference` literature.
+
+When invoked by Query Crafter, Chinese terms must be provided in `keyword_tiers_zh`; `tier2_required_anchor` inside that object identifies the indispensable technology for Search A. Falling back to English tiers must produce a warning.
 
 ## Workflow
 

@@ -4,7 +4,7 @@ description: "Google Scholar检索式构建器 | 三层关键词→Google Schola
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.2
+  version: 1.3
   keywords: [Google Scholar, search query, scholar, QueryStrategist]
   triggers: [Google Scholar, 检索式, 学者]
 ---
@@ -23,7 +23,10 @@ metadata:
 **QueryStrategist** 工作流（V2.0），作为 Search Strategist V1/V2 中 Search A（Query Crafter）的子模块之一。
 
 ## 版本
-V1.2
+V1.3
+
+## 变更记录
+- **V1.3 (2026-08-11)**：Search A 改为“对象 + 必需技术锚点 + 任务”三概念强制共现；长词表不再静默截断，而按字符预算生成多条互补查询，所有查询均保留对象层和技术锚点，任务词跨查询完整覆盖。
 
 ## 描述
 专门为 Google Scholar 平台生成可直接使用的高级检索式。严格遵守 Google Scholar 的语法规则，确保检索结果精准、可复现。
@@ -74,16 +77,16 @@ V1.2
 - 应用层：`(keyword1 OR keyword2 OR ...)`
 
 ### Step 2：生成主检索式
-**为最大化召回（基础检索式 A），采用宽口径布尔逻辑**：领域层用 `OR` 组合成一个组，技术层与应用层合并用 `OR` 组合成另一个组，两组之间以**空格**连接（Scholar 将空格视为 `AND`）。这样不要求三层同时命中，任一技术/应用词命中即召回：
-`(物种层) (技术层 OR 应用层)`
+**基础检索式 A 采用三概念强制共现**：领域层、必需技术锚点和应用层分别用 `OR` 组合，三组之间以空格连接（隐式 AND）：
+`(物种层) (必需技术锚点) (应用层)`
 *示例*：
 `
-(autonomous vehicle OR self-driving car OR "connected vehicle") ("computer vision" OR "deep learning" OR "object detection" OR "lane detection" OR "trajectory prediction" OR "semantic segmentation")
+(autonomous vehicle OR self-driving car OR "connected vehicle") ("computer vision" OR "deep learning") ("lane detection" OR "trajectory prediction" OR "semantic segmentation")
 `
-若词表较短、256 字符充裕，也可保留三层 `(物种层) (技术层) (应用层)` 逐层空格连接。精确检索（Query B）仍可在标题层用 `intitle:` 收紧。
+若提供 `tier2_required_anchor`，Search A 只使用该组作为必需技术概念；机器学习等支持方法进入补充查询，不得替代核心技术。
 
 **⚠️ 256 字符硬上限**：Scholar 检索式总长 ≤256 字符，超出部分被**静默截断**（不会报错但检索不完整）。当关键词较多时：
-- 单条查询无法容纳全部关键词 → 拆成多条互补检索（如技术词/应用词各取一半 + 一条 `intitle:review` 综述导向），多条合起来覆盖全部关键词。
+- 单条查询无法容纳全部关键词 → 按对象/锚点/任务的独立预算拆成多条互补检索；每条都保留三类概念，多条合起来覆盖全部关键词。
 - 排除串（`-词`）过长会挤占主检索词空间 → **省略排除串**，改由 Scholar 检索结果页的左侧筛选器或手动 `-词` 补充过滤（Query Crafter 生成器在 `warnings` 中提示此项）。
 
 ### Step 3：添加排除条件
@@ -118,21 +121,23 @@ V1.2
 
 **检索式 A：基础检索式（通用，最大召回率）**
 `
-(物种层) (技术层 OR 应用层)
+(物种层) (必需技术锚点) (应用层分组1)
+(物种层) (必需技术锚点) (应用层分组2)
 `
+*说明*：上面每一行是一条独立查询，不能把多行整体粘贴为一次检索。
 *示例*：
 `
-(autonomous vehicle OR self-driving car OR "connected vehicle") ("computer vision" OR "deep learning" OR "object detection" OR "lane detection" OR "trajectory prediction" OR "semantic segmentation")
+(autonomous vehicle OR self-driving car OR "connected vehicle") ("computer vision" OR "deep learning") ("lane detection" OR "trajectory prediction")
 `
 
 **检索式 B：精确检索式（推荐，兼顾召回与精度）**
 通过 `intitle:` 限定关键概念，确保标题包含核心主题：
 `
-intitle:review AND (物种层) AND (技术层) AND (应用层)
+(物种层) (技术层) (应用层) intitle:review
 `
 *示例*：
 `
-intitle:review AND (autonomous vehicle OR self-driving car) AND ("computer vision" OR "deep learning") AND ("lane detection" OR "trajectory prediction")
+(autonomous vehicle OR self-driving car) ("computer vision" OR "deep learning") ("lane detection" OR "trajectory prediction") intitle:review
 `
 
 **检索式 C：预印本检索式（如需补充最新前沿）**

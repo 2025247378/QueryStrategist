@@ -4,7 +4,7 @@ description: "QueryStrategist 单包主 Skill（Step 0–2）| 基于 LLM 的交
 license: MIT
 metadata:
   skill-author: PanY
-  version: 4.3.1
+  version: 4.3.2
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -21,6 +21,7 @@ metadata:
 QueryStrategist 单包版（Step 0–2）— 2026-08-11 检索策略版
 
 ## Change Log
+- **V4.3.2 (2026-08-11)**: 对照平台规则统一修正 Search A 六库生成逻辑：固定为“对象层 AND 必需技术锚点 AND 任务层”；拆分必需技术与支持方法；为 CNKI/万方增加独立中文词表与排除项；修正 WoS、Scopus、IEEE、Google Scholar、CNKI、万方的字段、布尔、邻近、通配符、长度/term 限制及拆分策略，并增加六库回归测试。
 - **V4.3.1 (2026-08-11)**: 修复 IEEE Xplore Command Search 生成器：移除无效的 `"Field":(A OR B)`，增加 25-term 自动拆分、All Metadata 宽泛式、逐项字段限定、NEAR/ONEAR 与回归测试。
 - **V4.3.0 (2026-08-10)**: 落实发布复盘 P0/P1：Search B 增加真实 API 配额守卫与 dry-run；统一 6 平台口径并补齐 Wanfang；标准化写作类型/年份配置透传；修复共享校验器 Windows 编码失败；清理演示材料中的已移除引擎描述。
 - **V4.2 (2026-08-09)**: 触发方式新增「演示模式提示」——为录屏/评审演示，入口统一用「开始文献检索」+ 全程固定话术（Setup Wizard Step 0.6），保证输出逐字一致、可复现。
@@ -240,7 +241,7 @@ If a sub-module encounters an error or cannot complete:
 | `config` | object | 0 — Setup Wizard | 1, 2 | Project Configuration Profile: `interaction_language` (ISO 639-1, auto-detected in Step 0), target language, writing type (综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义), journal tier, time span, CN supplements |
 | `active_project_id` | string | 0 — Setup Wizard | all | 当前激活的项目 ID。 |
 | `active_project_dir` | string | 0 — Setup Wizard | all | 当前激活项目目录（相对工作区根）。**所有下游文件读写与记忆操作仅限此目录**，见「项目隔离」硬规则。 |
-| `scope` | object | 1 — Scope Definer | 2 | Search Scope Confirmation Document (core direction, 3 keyword tiers, explicit exclusions, priority rules) |
+| `scope` | object | 1 — Scope Definer | 2 | Search Scope Confirmation Document（core direction；Tier 1 对象层；Tier 2 必需技术锚点 `tier2_required_anchor` 与支持方法 `tier2_supporting_method`；Tier 3 任务层；`keyword_tiers_zh` 中文词表；`explicit_exclusions` / `explicit_exclusions_zh` 排除项；priority rules） |
 | `search_strategy_pack_path` | string | 2 — Search Strategist V1 | final | Path to the delivered search strategy pack (scope_card.md + query_pack.md + candidate_list + usage_guide.md) |
 | `v1_report_path` | string | 2 — Search Strategist V1 | — | Path to Literature Collection Report V1 (.md)，作为检索策略包的候选清单来源 |
 

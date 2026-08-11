@@ -1,10 +1,10 @@
 ---
 name: wanfang_query_crafter
-description: "Wanfang检索式构建器 | 中文关键词→万方高级检索（跨库检索、资源类型限定、字段精准匹配、AND/OR/NOT 或 *+/− 逻辑组配、精确匹配双引号、时间范围），产出高级检索配置+专业检索式回显。QueryStrategist子模块，中文文献补充专用。Pure LLM-agent skill; no external MCP server required."
+description: "Wanfang检索式构建器 | 中文关键词→万方高级检索/专业检索（资源类型限定、字段选择、AND/OR/NOT 逻辑组配、精确匹配双引号、时间范围），产出高级检索配置+专业检索布尔式。QueryStrategist子模块，中文文献补充专用。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.2
+  version: 1.3
   keywords: [Wanfang, search query, Chinese literature, QueryStrategist]
   triggers: [万方, 检索式, 中文文献]
 ---
@@ -26,10 +26,13 @@ This skill is part of the **QueryStrategist** workflow (Step 2). It is invoked b
 Wanfang Query Crafter
 
 ## Version
-V1.2
+V1.3
+
+## Change Log
+- **V1.3 (2026-08-11)**：按万方当前官方“高级检索/专业检索”界面修正：专业检索由资源类型、字段下拉框和布尔文本框共同组成，生成器输出可粘贴到文本框的 `AND/OR/NOT` 表达式，不再生成官网当前界面未展示的 `主题:(...)` 字段前缀，也不再宣称支持 CNKI 的 `* + -` 运算符。
 
 ## Description
-A specialized query generator for the Wanfang Data platform. It translates a user's research scope into Wanfang's structured **Advanced Search** (高级检索 / 跨库检索) configuration: resource-type scoping, field-level precise matching, 与/或/非 (AND/OR/NOT) logic composition, exact/fuzzy matching, and time-range constraints. The output can be entered directly into Wanfang's advanced search form row-by-row, or pasted as a copyable retrieval expression (检索式回显) using `AND`/`OR`/`NOT` (WanFang also accepts `*`,`+`,`-` as synonyms). This skill targets the common failure mode where a one-box simple search (一框式检索) returns overly broad, low-relevance results because its structured, logically combinable advanced features were not used.
+A specialized query generator for the Wanfang Data platform. It translates a user's research scope into Wanfang's structured **Advanced Search** (高级检索 / 跨库检索) configuration: resource-type scoping, field-level precise matching, 与/或/非 (AND/OR/NOT) logic composition, exact/fuzzy matching, and time-range constraints. The output can be entered row-by-row in Advanced Search or pasted as a Boolean expression after selecting a field in Professional Search.
 
 ## Role
 You are an expert Chinese-language research librarian with deep knowledge of the Wanfang Data platform's search interface. You understand the difference between Wanfang's one-box simple search (一框式检索, weak) and its Advanced Search (高级检索, structured, combinable) mode, and can construct queries optimized for the latter. You are meticulous about field selection per resource type, logic relations (与/或/非, i.e., AND/OR/NOT), match mode (精确/模糊), time-range settings, and the proper handling of Chinese full-width vs. English half-width punctuation.
@@ -59,13 +62,13 @@ Map the deconstructed concepts onto Wanfang's Advanced Search form (高级检索
 - **Recommendation for a literature review**: check 学术期刊 + 学位论文 + 会议论文 by default; add 专利 only if the topic has a patent dimension.
 - Wanfang dynamically loads the available fields based on the selected resource type, so resource type must be chosen **before** field selection.
 
-**2. Field + value per row** (field syntax for Professional Search / 检索式回显): `字段:(值)`.
+**2. Field + value per row**:
 - Available fields: `主题` (题名+关键词+摘要, OR), `题名`, `关键词`, `摘要`, `作者`, `作者单位`, `刊名`, `文献来源`, `中图分类号`, `发表时间`, `DOI`, etc.
-- Enter the retrieval term in the corresponding field input box (or write `主题:(自动驾驶)` in the expression).
+- Enter the retrieval term in the corresponding field input box. In Professional Search, choose the field from the official dropdown and paste only the Boolean expression into the 800-character text box.
 - Click the "+" at the end of a condition row to add a new row; up to **5+ independent rows** can be composed.
 
 **3. Logic composition (逻辑组配)**:
-- Between any two condition rows, select the logic relation: **与** (AND, both satisfied), **或** (OR, either satisfied), **非** (NOT, excluded). In a copyable expression use `AND` / `OR` / `NOT` (WanFang also accepts `*`, `+`, `-` as synonyms).
+- Between any two condition rows, select the logic relation: **与** (AND, both satisfied), **或** (OR, either satisfied), **非** (NOT, excluded). In Professional Search use the operators shown by the current official interface: `AND` / `OR` / `NOT`.
 - Same-concept synonyms → place in the **same row** connected by 或 (OR).
 - Heterogeneous concepts → place on **separate rows** connected by 与 (AND).
 - Exclusion terms → connect with 非 (NOT) on the final row.
@@ -73,8 +76,8 @@ Map the deconstructed concepts onto Wanfang's Advanced Search form (高级检索
 
 **4. Match mode & time range (匹配方式与时间范围)**:
 - Under each condition, set **匹配**: 精确 (whole-word match, no splitting) or 模糊 (supports synonym expansion and word-order tolerance).
-- Use **double quotes `"..."`** around multi-word phrases for exact matching (e.g., `主题:("目标检测")` or `"计算机视觉"`).
-- In the **发表时间** area, set the start and end years (e.g., 2020–2026), or include `发表时间:(2020-2026)` in the expression.
+- Use **double quotes `"..."`** around text that must be treated as one exact phrase.
+- In the **发表时间** area, set the start and end years (e.g., 2020–2026). Keep the date range in the official UI controls.
 
 ### Step 3: Output the Final Configuration
 Present the result as (a) a row-by-row form configuration table that mirrors Wanfang's advanced search UI, and (b) a single copyable retrieval expression (检索式回显) using `AND`/`OR`/`NOT` for quick re-paste into Professional Search.
@@ -95,11 +98,12 @@ Row 3: [Field: 题名] | Value: (目标检测 OR 轨迹预测) | Match: 精确 |
 `
 **Time range (发表时间)**: 2020 – 2026
 
-### 3. Retrieval Expression (检索式回显, copyable — paste into Professional Search)
+### 3. Professional Search Boolean Expression
+Select `全部主题` or `主题` in the field dropdown, then paste:
 `
-主题:(自动驾驶 OR 智能网联汽车) AND 关键词:(计算机视觉 OR 深度学习) AND 题名:(目标检测 OR 轨迹预测) AND 发表时间:(2020-2026)
+(自动驾驶 OR 智能网联汽车) AND (计算机视觉 OR 深度学习) AND (目标检测 OR 轨迹预测)
 `
-This echo string mirrors Wanfang's expression syntax (`AND`/`OR`/`NOT`, also accepts `*`,`+`,`-`); it can be re-pasted into the professional search box to reproduce the strategy.
+Set publication years with the official `发表时间` controls.
 
 ### 4. Usage Guide & Best Practices
 - **Step 1**: Visit the Wanfang Data homepage (https://www.wanfangdata.com.cn).
@@ -114,5 +118,5 @@ This echo string mirrors Wanfang's expression syntax (`AND`/`OR`/`NOT`, also acc
 - Wanfang loads available fields **dynamically** based on the selected resource type — choose the resource type first to avoid invalid field inputs.
 - After retrieval, the left-side **学科分类 / 核心期刊 / 文献类型** filters are the primary secondary-narrowing tools; use them before rewriting the query.
 - Review every condition for Chinese full-width punctuation. Logic relations and parentheses in the retrieval expression should follow Wanfang's displayed format.
-- **WanFang accepts BOTH `AND`/`OR`/`NOT` and `*`,`+`,`-`** as logic operators (priority `NOT > AND > OR`). Unlike CNKI's advanced-search box (which uses only `* + -`), WanFang's professional/expression search treats them as synonyms — so using CNKI-style `* + -` in WanFang is valid, not an error.
+- **Current official interface shows `AND`/`OR`/`NOT`** with precedence `( ) > NOT > AND > OR`. Do not emit CNKI-style `* + -` unless a future official Wanfang page explicitly documents it.
 - **万方高级检索每行之间的关系仅 与(AND) / 或(OR) / 非(NOT) 三种**：最后一行之后没有逻辑关系符（切勿用 "—" 表示"结束"）。"非"用于把整行作为排除条件放在末行；中间行之间只能用 与/或 连接。

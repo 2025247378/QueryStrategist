@@ -46,6 +46,10 @@ class IEEEQueryTests(unittest.TestCase):
         self.assertNotIn('"Abstract":', query)
         self.assertNotIn(" AND NOT ", query)
         self.assertIn(" NOT (", query)
+        for tier_terms in scope["keyword_tiers"].values():
+            for term in tier_terms:
+                expected = f'"{term}"' if " " in term else term
+                self.assertIn(expected, query)
 
     def test_title_field_is_repeated_for_each_or_value(self):
         tiers = {
@@ -54,11 +58,11 @@ class IEEEQueryTests(unittest.TestCase):
             "tier3_application_task": ["freshness"],
         }
         query = QUERY_GENERATOR.build_ieee(tiers, [], broad=False)
-        self.assertIn('"Document Title":"fish"', query)
+        self.assertIn('"Document Title":fish', query)
         self.assertIn('"Document Title":"farmed fish"', query)
         self.assertNotRegex(query, r'"Document Title"\s*:\s*\(')
 
-    def test_all_variants_follow_syntax_and_term_limit(self):
+    def test_all_variants_follow_syntax_and_clause_limit(self):
         variants = QUERY_GENERATOR.generate_variants(
             aquaculture_scope(), ["ieee"]
         )["ieee"]
@@ -72,6 +76,17 @@ class IEEEQueryTests(unittest.TestCase):
                 variant["variant"],
             )
 
+    def test_boolean_separated_terms_do_not_trigger_global_split(self):
+        scope = aquaculture_scope()
+        variants = QUERY_GENERATOR.generate_variants(scope, ["ieee"])["ieee"]
+        broad = [row for row in variants if row["variant"] == "broad"]
+        self.assertEqual(len(broad), 1)
+        self.assertGreater(broad[0]["query"].count(" OR "), 25)
+        self.assertLessEqual(
+            QUERY_GENERATOR._ieee_query_term_count(broad[0]["query"]),
+            QUERY_GENERATOR.IEEE_MAX_SEARCH_TERMS,
+        )
+
     def test_split_variants_preserve_all_application_terms(self):
         scope = aquaculture_scope()
         variants = QUERY_GENERATOR.generate_variants(scope, ["ieee"])["ieee"]
@@ -79,17 +94,51 @@ class IEEEQueryTests(unittest.TestCase):
             row["query"] for row in variants if row["variant"].startswith("broad")
         )
         for term in scope["keyword_tiers"]["tier3_application_task"]:
-            self.assertIn(f'"{term}"', broad_text)
+            expected = f'"{term}"' if " " in term else term
+            self.assertIn(expected, broad_text)
 
     def test_ieee_specific_proximity_and_optional_conference_variants(self):
         scope = aquaculture_scope()
         scope["ieee_publication_titles"] = ["IEEE Access", "OCEANS"]
         variants = QUERY_GENERATOR.generate_variants(scope, ["ieee"])["ieee"]
         queries = "\n".join(row["query"] for row in variants)
-        self.assertIn(" NEAR/3 ", queries)
-        self.assertIn(" ONEAR/3 ", queries)
+        self.assertIn(" NEAR/10 ", queries)
+        self.assertIn(" ONEAR/10 ", queries)
         self.assertIn('"Publication Title":"IEEE Access"', queries)
-        self.assertIn('"Publication Title":"OCEANS"', queries)
+        self.assertIn('"Publication Title":OCEANS', queries)
+
+    def test_proximity_connects_method_and_task_tiers(self):
+        scope = aquaculture_scope()
+        variants = QUERY_GENERATOR.generate_variants(scope, ["ieee"])["ieee"]
+        proximity = "\n".join(
+            row["query"] for row in variants
+            if row["variant"].startswith("proximity")
+        )
+        self.assertIn('"hyperspectral imaging"', proximity)
+        self.assertIn('"quality assessment"', proximity)
+        self.assertIn(" NEAR/10 ", proximity)
+        self.assertIn(" ONEAR/10 ", proximity)
+
+    def test_simple_words_are_unquoted_but_phrases_are_quoted(self):
+        query = QUERY_GENERATOR.build_ieee(
+            {
+                "tier1_species_object": ["fish", "farmed fish"],
+                "tier2_technology_method": ["spectroscopy"],
+                "tier3_application_task": ["freshness"],
+            },
+            [],
+        )
+        self.assertIn("(fish OR \"farmed fish\")", query)
+        self.assertIn("(spectroscopy)", query)
+        self.assertIn("(freshness)", query)
+
+    def test_wildcard_constraints_are_validated(self):
+        with self.assertRaisesRegex(ValueError, "three preceding"):
+            QUERY_GENERATOR._ieee_validate_query("f* AND fish")
+        with self.assertRaisesRegex(ValueError, "10-wildcard"):
+            QUERY_GENERATOR._ieee_validate_query(
+                " OR ".join(f"term{i}*" for i in range(11))
+            )
 
 
 if __name__ == "__main__":

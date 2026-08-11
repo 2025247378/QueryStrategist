@@ -4,7 +4,7 @@ description: "综述范围界定器 | 将研究方向收敛为三级关键词体
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.2
+  version: 1.3
   keywords: [literature search, scoping, keyword tiers, exclusion criteria, QueryStrategist]
   triggers: [综述范围, scope, 界定, 关键词, 排除项]
 ---
@@ -23,9 +23,10 @@ metadata:
 This skill is part of the **QueryStrategist** workflow (Step 1). It receives the configuration profile from Setup Wizard and interactively narrows down the user's research direction into a concrete, searchable scope.
 
 ## Version
-V1.2
+V1.3
 
 ## Change Log
+- **V1.3 (2026-08-11)**: 为 Search A 增加“必需技术锚点”和“支持方法”分层；启用中文补充时同时产出独立中文词表与中文排除项，避免 CNKI/万方收到英文检索词。
 - **V1.2 (2026-08-09)**: 新增「交互工具可用性与纯文本降级（MANDATORY）」——`AskUserQuestion` 在无此工具的环境（如 Codex）下降级为聊天内编号列表；正文中「综述 / Review Type」措辞对齐 QueryStrategist 检索策略口径（写作类型）。品牌从 AI for Review 改为 QueryStrategist。
 - **V1.1**: 修正范围界定模式——研究范围确认文档的**内容必须由用户通过提问来确定**，而非由助手推断后仅让用户「确认/调整」。Step 2 改为「交互式协同构建」：先获取用户的一句话方向，再针对真正需要用户判断的维度（模态关系、物种粒度、子任务、排除项等）用 AskUserQuestion 提问并确定内容，最后把用户的选择结构化为文档。AskUserQuestion 不再仅保留给 G1 确认门，也用于 Step 2 协同定界。
 - **V1.0**: 初始发布（单句描述 + LLM 推断模式）。
@@ -79,13 +80,18 @@ Compile and output the document from the user's answers in Step 2, then present 
 - **Keyword Tiers**:
  - Tier 1 – Species/Object: [keywords]
  - Tier 2 – Technology/Method: [keywords]
+ - Tier 2 Required Anchor: [indispensable technology terms that every Search A result must contain]
+ - Tier 2 Supporting Method: [analysis/algorithm terms that cannot replace the required anchor]
  - Tier 3 – Application/Task: [keywords]
 - **Explicit Exclusions**: [only what the user explicitly selected]
+- **Chinese Keyword Tiers** (when Chinese supplement is enabled): [independent Chinese Tier 1 / Required Anchor / Supporting Method / Tier 3]
+- **Chinese Explicit Exclusions** (when Chinese supplement is enabled): [Chinese equivalents confirmed by the user]
 - **Suggested Literature Priority**: (based on configuration) e.g., English empirical > English reviews > Chinese empirical > Chinese reviews
 - **Writing Type Alignment**: [e.g., critical-angle writing — diagnostic angle: identifying structural barriers in cross-species technology transfer]
 
 ## Important Notes
 - This skill does NOT retrieve any literature; it only defines the search boundaries.
+- Do not place indispensable technology and generic supporting algorithms in one undifferentiated OR group. For example, spectral imaging is a required anchor for a spectral-imaging review, while machine learning and image processing are supporting methods.
 - The output must be passed in its entirety to Search Strategist V1 (Step 2).
 - Scope content is **determined by the user through targeted questions (Step 2)**, then structured by the assistant — not inferred by the assistant and merely rubber-stamped at G1. Use `AskUserQuestion`（无此工具则聊天内编号列表）in Step 2 to co-determine the substantive dimensions (bundle related questions into one call; `multiSelect` for sub-tasks/exclusions), and again at the G1 gate to confirm. Do NOT add "(Recommended)" labels to any option. Do NOT pre-fill exclusions the user did not explicitly choose.
 - At the end of the output, confirm the scope before proceeding (G1 gate), via `AskUserQuestion`（无此工具则聊天内列出「1. 确认，继续 / 2. 需要调整」请用户回复编号）:
