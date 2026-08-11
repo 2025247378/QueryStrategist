@@ -51,6 +51,7 @@ class HarvestTests(unittest.TestCase):
                 "fish spectral freshness", verify=False,
                 species_terms=["fish"], tech_terms=["spectral imaging"],
                 task_terms=["freshness"],
+                network_consent=True,
             )
         filtered.assert_called_once()
         self.assertEqual(result["statistics"]["harvested"], 0)
@@ -68,6 +69,7 @@ class HarvestTests(unittest.TestCase):
              patch.object(sys, "argv", [
                  "harvest.py", "--species", "fish",
                  "--technology", "spectral imaging", "--task", "freshness",
+                 "--network-consent",
              ]), \
              patch("sys.stdout", new_callable=io.StringIO):
             HARVEST.main()
@@ -76,6 +78,11 @@ class HarvestTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["species_terms"], ["fish"])
         self.assertEqual(run.call_args.kwargs["tech_terms"], ["spectral imaging"])
         self.assertEqual(run.call_args.kwargs["task_terms"], ["freshness"])
+        self.assertTrue(run.call_args.kwargs["network_consent"])
+
+    def test_harvest_rejects_missing_network_consent(self):
+        with self.assertRaisesRegex(PermissionError, "网络访问授权"):
+            HARVEST.harvest("fish spectral freshness", verify=False)
 
 
 if __name__ == "__main__":

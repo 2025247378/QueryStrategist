@@ -499,7 +499,7 @@ def verify_openalex_results(papers, mailto=None, skip_verify=False):
 def harvest(query, per_platform=20, verify=True, mailto=None,
             min_year=None, max_year=None, cache_dir=None, budgets=None,
             species_terms=None, tech_terms=None, task_terms=None,
-            exclude_terms=None):
+            exclude_terms=None, network_consent=False):
     """OpenAlex 收割 + Crossref 逐条验证（Search B 精简两源版）。
 
     Args:
@@ -507,6 +507,7 @@ def harvest(query, per_platform=20, verify=True, mailto=None,
         per_platform:  返回数量
         verify:        是否启用 Crossref 验证（默认 True）
         mailto:        Crossref polite 池标识邮箱（可选）
+        network_consent: 是否已获得本次 OpenAlex/Crossref 网络访问授权
 
     Returns:
         {
@@ -521,6 +522,10 @@ def harvest(query, per_platform=20, verify=True, mailto=None,
     filtered_terms = (species_terms, tech_terms, task_terms)
     if any(terms is not None for terms in filtered_terms) and not all(filtered_terms):
         raise ValueError("三层过滤必须同时提供 species_terms、tech_terms、task_terms")
+    if not network_consent:
+        raise PermissionError(
+            "未获得网络访问授权：调用 OpenAlex/Crossref 前必须由用户明确同意"
+        )
     global _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR
     previous_budget, previous_cache = _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR
     _ACTIVE_BUDGET = RequestBudget(budgets)
@@ -567,8 +572,13 @@ def harvest(query, per_platform=20, verify=True, mailto=None,
     return result
 
 
-def _demo():
-    return harvest("organ-on-a-chip drug toxicity screening", per_platform=3, verify=False)
+def _demo(network_consent=False):
+    return harvest(
+        "organ-on-a-chip drug toxicity screening",
+        per_platform=3,
+        verify=False,
+        network_consent=network_consent,
+    )
 
 
 def main():
@@ -596,6 +606,8 @@ def main():
     ap.add_argument("--no-cache", action="store_true", help="关闭响应缓存")
     ap.add_argument("--openalex-budget", type=int, default=None, help="本次 OpenAlex 请求预算")
     ap.add_argument("--crossref-budget", type=int, default=None, help="本次 Crossref 请求预算")
+    ap.add_argument("--network-consent", action="store_true",
+                    help="确认用户已授权访问 api.openalex.org 和 api.crossref.org")
     ap.add_argument("--dry-run", action="store_true", help="只检查参数与预算，不发起网络请求")
     ap.add_argument("--no-bootstrap", action="store_true", default=False,
                     help="禁用自动安装依赖（依赖由用户自行管理；等价于设 HARVEST_NO_BOOTSTRAP=1，适合离线环境）")
@@ -634,6 +646,7 @@ def main():
             "min_year": args.min_year,
             "max_year": args.max_year,
             "verify": args.verify,
+            "network_consent": args.network_consent,
             "budgets": {
                 "openalex": args.openalex_budget or int(os.environ.get("HARVEST_OPENALEX_BUDGET", "120")),
                 "crossref": args.crossref_budget or int(os.environ.get("HARVEST_CROSSREF_BUDGET", "60")),
@@ -641,6 +654,9 @@ def main():
             "network_requests": 0,
         }, ensure_ascii=False, indent=2))
         return
+
+    if not args.network_consent:
+        ap.error("发起 API 请求前必须先获得用户授权，并显式传入 --network-consent")
 
     bootstrap_installed = []
     bootstrap_disabled = args.no_bootstrap or os.environ.get("HARVEST_NO_BOOTSTRAP") == "1"
@@ -659,13 +675,14 @@ def main():
                          cache_dir=False if args.no_cache else args.cache_dir,
                          budgets={"openalex": args.openalex_budget,
                                   "crossref": args.crossref_budget},
-                         species_terms=args.species,
-                         tech_terms=args.technology,
-                         task_terms=args.task,
-                         exclude_terms=args.exclude)
+                          species_terms=args.species,
+                          tech_terms=args.technology,
+                          task_terms=args.task,
+                          exclude_terms=args.exclude,
+                          network_consent=args.network_consent)
     else:
         print("[demo] 未提供 --query，使用示例检索词:\n")
-        result = _demo()
+        result = _demo(network_consent=args.network_consent)
 
     text = json.dumps(result, ensure_ascii=False, indent=2)
     if args.out:

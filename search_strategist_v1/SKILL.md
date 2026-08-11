@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.23
+  version: 1.24
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -23,9 +23,10 @@ metadata:
 This skill is part of the **QueryStrategist** workflow (V2.0, Step 2). It receives the Review Scope Confirmation Document from Scope Definer and performs the first round of literature retrieval, focusing primarily on **review articles**, delivering the search strategy pack as the pipeline's final output.
 
 ## Version
- V1.23
+ V1.24
 
 ## Change Log
+- **V1.24（2026-08-11 Search B 网络授权）**: 在 OpenAlex/Crossref 联网前增加一次明确授权；授权在当前流水线运行及 Retry 中复用，拒绝时仅跳过 Search B，Search A 与检索策略包交付继续。主流程固定使用 Crossref 匿名公共池，不提交 `mailto`；`harvest.py` 联网命令必须带 `--network-consent`。
 - **V1.23（2026-08-11 HTML 工作台）**: 新增 `index.html` 默认入口、统一导航和本页目录；检索式页增加数据库标签页与复制按钮；候选清单增加搜索、验证状态/OA/年份筛选和表头排序；增加打印和移动端样式，全部资源内嵌且离线可用。
 - **V1.22（2026-08-11 交付格式优化）**: 检索策略包 Markdown/CSV 统一 UTF-8 BOM；从同名 Markdown 自动生成离线 HTML 作为默认阅读入口；正文状态标记改为纯文本，检索式代码块禁止改写；新增编码、U+FFFD、代码块与 HTML 落盘校验。
 - **V1.20（2026-08-10 OA 简化）**: OA 状态改为**收割时直接附带**（用户决策）——OpenAlex 收割响应原生携带 `open_access` 字段，`harvest.py`（V2.1）通过 `select=open_access` 一次请求同时拿到 `is_oa` / `oa_status`，**零额外 API 调用、零额外错误点**。历史版本的 `scripts/enrich_oa.py` 方案已废弃删除，不再有独立回查环节。
@@ -80,9 +81,9 @@ Confirm receipt of the Review Scope Confirmation Document. Briefly restate the c
 
 > ""I have received your review scope. I will now execute two parallel retrieval pathways:
 > - **Search A**: I will call **Query Crafter** to generate ready-to-use advanced search queries for Web of Science, Scopus, IEEE Xplore, Google Scholar, CNKI, and Wanfang (the Chinese databases are enabled by configuration).
-> - **Search B**: I will call **Literature Harvester** to harvest literature metadata from **OpenAlex** and **cross-verify each entry via Crossref by DOI** (filtering out hallucinated/mis-attributed entries — zero keys required).
+> - **Search B**: With your explicit network-access consent, I will call **Literature Harvester** to harvest literature metadata from **OpenAlex** and **cross-verify each entry via Crossref by DOI** (filtering out hallucinated/mis-attributed entries — zero keys required).
 >
-> This first round focuses on **review articles** (reviews, surveys, state-of-the-art papers) to provide a comprehensive landscape for topic discovery in the next step. Both pathways will run simultaneously. Let me begin.""
+> This first round focuses on **review articles** (reviews, surveys, state-of-the-art papers) to provide a comprehensive landscape for topic discovery. I will explain Search B's network access and request consent before starting it.""
 
 ### Step 1.4: 预告 Search B 引擎方案（MANDATORY，置于 Search B 启动前）
 
@@ -92,14 +93,38 @@ Confirm receipt of the Review Scope Confirmation Document. Briefly restate the c
 
 | 引擎 | 状态 | 说明 |
 |:---|:---|:---|
-| **OpenAlex** | ✅ 启用（收割主源） | 稳定主源，免费高并发，无需任何 Key |
-| **Crossref** | ✅ 启用（验证器） | 按 DOI 逐条回查验证（title 相似度≥0.8 且 year 差≤1），剔除疑似幻觉/错配条目 |
+| **OpenAlex** | 计划启用（待授权） | 稳定主源，免费高并发，无需任何 Key；访问 `api.openalex.org` |
+| **Crossref** | 计划启用（待授权） | 按 DOI 逐条回查验证（title 相似度≥0.8 且 year 差≤1），访问 `api.crossref.org` |
 
-展示后直接进入 Step 2 + Step 3 并行执行 Search A 与 Search B——**本轮 Search B 零密钥、零弹窗、零申请教程**（V2.0 起不再询问 Semantic Scholar Key / Crossref 访问池 / Scholar-KG，三者已从套件移除）。
+展示后进入 Step 1.5 请求一次网络访问授权。不得在用户答复前启动 Search B 或向任一 API 发送请求。
 
-### Step 1.5: （已移除 — V2.0 起零密钥零弹窗）
+### Step 1.5: Search B 网络访问授权（MANDATORY，仅询问一次）
 
-> 原 Step 1.5 的 Semantic Scholar Key 询问、Scholar-KG 适用性判断与门控、Crossref 访问池询问、两份申请指南，已随 Literature Harvester V2.0 整段删除。Search B 现仅用 OpenAlex（收割）+ Crossref（验证），均无需 Key。若用户主动询问"要不要 Key"，回答：本套件 Search B 已精简为两源开放 API，无需任何 Key。
+优先使用 `AskUserQuestion`；当前宿主没有该工具时，以编号选项展示。提示正文必须逐字使用：
+
+> 接下来将通过 OpenAlex 收割候选文献，并通过 Crossref 逐条核验 DOI。该步骤需要访问 api.openalex.org 和 api.crossref.org 的 HTTPS 接口，不下载全文、不提交个人信息。是否允许执行？
+
+选项：
+1. `允许执行`
+2. `不允许，跳过 Search B`
+
+把结果记录到 Pipeline Context：
+
+```json
+{
+  "network_access_consent": {
+    "granted": true,
+    "endpoints": ["api.openalex.org", "api.crossref.org"],
+    "purpose": "OpenAlex harvest + Crossref DOI verification",
+    "mailto_submitted": false
+  }
+}
+```
+
+- **只问一次**：同一次流水线运行内，包括 Search B 子查询与 Retry，复用该授权，不得逐查询重复询问。新项目或新一次独立运行必须重新询问。
+- **允许**：进入 Step 2 + Step 3，可并行执行 Search A 与 Search B。
+- **拒绝**：只进入 Step 2；禁止调用 Literature Harvester、禁止发出任何 OpenAlex/Crossref 请求。记录 `network_access_consent.granted=false` 与 `part_b_status=skipped_by_user`，然后继续交付 Search A 和检索策略包。
+- 该询问是外部网络操作授权，不是 API Key/访问池询问，也不新增 G0–G2 业务决策门。
 
 ### Step 2: Execute Search A — Query Crafter
 **⚠️ CRITICAL (No Phantom Actions):** "Invoke the Query Crafter sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue the `Skill` tool call for `query_crafter` in this turn — do NOT merely write "loading Query Crafter" and stop. Invoke the **Query Crafter** sub-skill with the following parameters:
@@ -119,7 +144,9 @@ Query Crafter will automatically activate the appropriate platform-specific sub-
 Receive the compiled multi-platform query package from Query Crafter.
 
 ### Step 3: Execute Search B — Literature Harvester
-**⚠️ CRITICAL (No Phantom Actions):** "invoke the Literature Harvester sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue the `Skill` tool call for `literature_harvester` in this turn — do NOT merely write "先加载 Literature Harvester 子技能…" and stop. Simultaneously with Step 2, invoke the **Literature Harvester** sub-skill with the following parameters:
+**硬前置条件：`network_access_consent.granted == true`。** 未授权或字段缺失时，禁止调用 Literature Harvester，按 `part_b_status=skipped_by_user` 继续 Search A 与交付流程。
+
+**⚠️ CRITICAL (No Phantom Actions):** 已授权时，"invoke the Literature Harvester sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue the `Skill` tool call for `literature_harvester` in this turn — do NOT merely write "先加载 Literature Harvester 子技能…" and stop. Simultaneously with Step 2, invoke the **Literature Harvester** sub-skill with the following parameters:
 - `species_terms`：对象层词列表，对应 `--species`
 - `tech_terms`：必需技术锚点词列表，对应 `--technology`
 - `task_terms`：任务/应用层词列表，对应 `--task`
@@ -128,9 +155,12 @@ Receive the compiled multi-platform query package from Query Crafter.
 - Writing type and derived search focus
 - Results limit: 20–25 per sub-query
 - `verify`: `True` (default) — Crossref 逐条验证开启
-- `mailto`: optional real email for Crossref polite pool (10 req/s); empty → anonymous public pool (5 req/s)
+- `network_consent`: `True`，对应 CLI `--network-consent`
+- `mailto`: **固定为空**，使用 Crossref 匿名公共池；标准主流程不得提交邮箱或其他个人信息
 
-**三层参数传递硬规则：** 当 Scope Document 提供三层词时，每个子查询必须调用 `harvest.py --query <trace-query> --species <对象词...> --technology <技术词...> --task <任务词...> [--exclude <排除词...>]`。不得只传普通 `--query`，否则不会启用 OpenAlex 三层强制共现过滤。
+**三层参数传递硬规则：** 当 Scope Document 提供三层词时，每个子查询必须调用 `harvest.py --network-consent --query <trace-query> --species <对象词...> --technology <技术词...> --task <任务词...> [--exclude <排除词...>]`。不得遗漏 `--network-consent`，也不得只传普通 `--query`，否则脚本会拒绝联网或不会启用 OpenAlex 三层强制共现过滤。
+
+只有用户主动要求使用 Crossref polite pool 时，才另行说明会通过 `mailto` 提交其邮箱，并在用户明确同意后传入；此时把 `mailto_submitted` 记录为 `true`。不得把 Step 1.5 的标准授权解释为同意提交邮箱。
 
 Literature Harvester will:
 - Harvest candidate metadata from **OpenAlex** (the sole harvest source)
@@ -177,7 +207,7 @@ For each activated database, display:
 - Usage notes for each query
 
 **Part B – API Harvested Literature**:
-Display:
+If `part_b_status=skipped_by_user`, display `Search B status: skipped_by_user（用户未授权外部 API 访问）`, do not fabricate harvesting statistics or an empty successful harvest. Otherwise display:
 - Retrieval & verification statistics table (harvested / verified / unverified / dropped counts)
 - Complete verified literature list with ALL entries — do not truncate. For each entry show: No., Title, First Author, Year, DOI (if available), Verification status
 - A short "Dropped examples" note (2–3 typical hallucinated/mis-attributed entries that Crossref verification caught — demonstrates the verification layer is working)
@@ -227,6 +257,13 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
     "core_keywords": {"tier1_species": [...], "tier2_technology": [...], "tier3_application": [...]}
   },
   "part_a_databases": ["WoS", "Scopus", "IEEE", "Google Scholar", "CNKI", "Wanfang"],
+  "network_access_consent": {
+    "granted": true,
+    "endpoints": ["api.openalex.org", "api.crossref.org"],
+    "purpose": "OpenAlex harvest + Crossref DOI verification",
+    "mailto_submitted": false
+  },
+  "part_b_status": "completed | skipped_by_user",
   "part_b_statistics": {
     "harvested_count": N,
     "verified_count": N,
@@ -343,7 +380,7 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 | Total Search Effort | Manual queries: [N] databases + Automated: OpenAlex harvest + Crossref verification |
 
 ## Important Notes
-- **V2.0 CRITICAL**: Search B = **OpenAlex 收割 + Crossref 逐条验证**，零密钥零弹窗。Semantic Scholar / Scholar-KG 及其 Key 询问、申请指南、门控规则已整段删除。不要向用户询问任何 API Key / 访问池。
+- **V2.5 CRITICAL**: Search B = **OpenAlex 收割 + Crossref 逐条验证**，零密钥，但联网前必须询问一次网络访问授权。Semantic Scholar / Scholar-KG 及其 Key 询问、申请指南、门控规则已删除；不要询问任何 API Key / 访问池。用户拒绝时跳过 Search B，Search A 与交付继续。
 - **V2.0 CRITICAL**: 验证是去幻觉核心——Crossref 按 DOI 回查比对 title（相似度≥0.8）与 year（|Δ|≤1），不通过 → `dropped`（疑似幻觉/错配）；无 DOI → `unverified`。展示时用 `verified / unverified / dropped` 三态，绝不把 `dropped` 混进候选清单。
 - **V4.0 CRITICAL**: After Search A + Search B results are displayed (and Step 5 save is handled), the assistant MUST execute **Step 5.5: Deliver Search Strategy Pack**. This is the pipeline endpoint (G2). Do NOT load any downstream topic-selection module (removed in V4.0, not part of this suite), do NOT ask the user for a PDF folder path, do NOT offer to auto-download PDFs. Deliver the four-piece pack and stop at the G2 gate for user confirmation.
 - **V1.1 CRITICAL**: Part A (all queries) and Part B (all harvested literature) MUST be inline in chat, never summarized or file-only.
