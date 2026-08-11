@@ -1,5 +1,9 @@
 import argparse, os, re, sys
 
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="replace")
+
 # ---- ROOT 推导 ----
 # 优先级：
 # 1) --root 显式指定（最高优先）
@@ -48,8 +52,11 @@ for d in sorted(os.listdir(ROOT)):
         continue
     sk = os.path.join(ROOT, d, "SKILL.md")
     if not os.path.isfile(sk):
+        sk = os.path.join(ROOT, d, "SKILL.sub.md")
+    if not os.path.isfile(sk):
         continue
-    txt = open(sk, encoding="utf-8").read()
+    with open(sk, encoding="utf-8") as f:
+        txt = f.read()
     # frontmatter
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n", txt, re.S)
     if not m:
@@ -70,8 +77,8 @@ for d in sorted(os.listdir(ROOT)):
     # checks
     if not name:
         errors.append(f"[{d}] 缺 name")
-    elif " " in name or "-" in name:
-        errors.append(f"[{d}] name 含空格/连字符(应用下划线): {name}")
+    elif not re.fullmatch(r"[a-z0-9_-]+", name):
+        errors.append(f"[{d}] name 含非法字符（仅允许小写字母、数字、连字符或下划线）: {name}")
     elif name != d:
         warns.append(f"[{d}] name({name}) 与目录名不一致")
     if not lic:
@@ -93,7 +100,8 @@ for d in sorted(os.listdir(ROOT)):
 # 根级总入口 SKILL.md（多 skill 套件包在根目录放总入口时校验）
 root_sk = os.path.join(ROOT, "SKILL.md")
 if os.path.isfile(root_sk):
-    txt = open(root_sk, encoding="utf-8").read()
+    with open(root_sk, encoding="utf-8") as f:
+        txt = f.read()
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n", txt, re.S)
     if not m:
         errors.append("[根SKILL.md] 无合法 frontmatter (--- 包裹)")
@@ -107,8 +115,8 @@ if os.path.isfile(root_sk):
         rkws  = re.search(r"keywords\s*:", fm)
         rtrg  = re.search(r"triggers\s*:", fm)
         if not rname: errors.append("[根SKILL.md] 缺 name")
-        elif " " in rname.group(1).strip() or "-" in rname.group(1).strip():
-            errors.append(f"[根SKILL.md] name 含空格/连字符: {rname.group(1).strip()}")
+        elif not re.fullmatch(r"[a-z0-9_-]+", rname.group(1).strip()):
+            errors.append(f"[根SKILL.md] name 含非法字符: {rname.group(1).strip()}")
         if not rlic: errors.append("[根SKILL.md] 缺 license")
         if not rdesc: errors.append("[根SKILL.md] 缺 description")
         if not rau: warns.append("[根SKILL.md] metadata 缺 skill-author")
@@ -119,10 +127,10 @@ if os.path.isfile(root_sk):
 
 print(f"共扫描 SKILL.md: {ok} 个 (扫描根: {ROOT})")
 print(f"错误(必须修): {len(errors)}")
-for e in errors: print("  ❌", e)
+for e in errors: print("  [ERROR]", e)
 print(f"警告(建议修): {len(warns)}")
-for w in warns[:40]: print("  ⚠️", w)
-print("结论:", "全部合规 ✅" if not errors else "存在必须修复项 ❌")
+for w in warns[:40]: print("  [WARN]", w)
+print("结论:", "全部合规 [OK]" if not errors else "存在必须修复项 [ERROR]")
 
 # 扫描数为 0 视为校验失败（杜绝"0 个也全部合规"的假阳性）
 if ok == 0:

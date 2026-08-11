@@ -272,6 +272,24 @@ At the end of the session, output the following profile. This profile will be re
 | Chinese-Language Supplement | [selected] |
 | Industry Report Supplement | [selected] |
 
+**持久化字段规范（下游唯一读取口径）**：G0 通过后，同时写入项目目录下的 `project_meta.json` 与 `pipeline_state/config.json`。`literature_time_span` 必须保存为结构化年份对象；若用户选择“近 5 年/近 10 年”，先按运行当天年份计算并把起止年份一并保存。下游模块不得只读取展示用的中文标签。
+
+```json
+{
+  "interaction_language": "zh",
+  "target_language": "简体中文",
+  "target_journal": "暂未确定",
+  "writing_type": "综述",
+  "literature_time_span": {
+    "label": "近 10 年",
+    "start": 2016,
+    "end": 2026
+  },
+  "chinese_language_supplement": true,
+  "industry_report_supplement": false
+}
+```
+
 ## Important Notes
 - **Two independent language dimensions**: `Interaction Language` (auto-detected in Step 0 — follows the user's input language; controls ALL dialogue and user-facing output) vs `Target Language` (set in Step 2 #1 — the language the search strategy deliverables — query pack, candidate list, usage guide — are written in, determined by the target journal/language). These are independent: e.g., a user conversing in Japanese (`ja`) may still target an English-language journal (`en`).
 - Decisions made here are binding for the current project but can be adjusted by re-running Setup Wizard at any time.

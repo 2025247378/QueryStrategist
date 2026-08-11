@@ -4,7 +4,7 @@ description: "IEEE Xplore检索式构建器 | 三层关键词→IEEE Xplore【Ad
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.6
+  version: 1.7
   keywords: [IEEE Xplore, command search, search query, engineering, QueryStrategist]
   triggers: [IEEE, 检索式, 工程文献, IEEE Xplore, Command Search, command search]
 ---
@@ -23,9 +23,10 @@ metadata:
 This skill is part of the **QueryStrategist** workflow (Step 2). It is called by **Search Strategist V1** to generate platform-specific advanced search queries for IEEE Xplore. The queries are used by the user for manual retrieval of high-quality literature, primarily in computer science, electrical engineering, and related interdisciplinary fields.
 
 ## Version
-V1.6
+V1.7
 
 ## Change Log
+- **V1.7 (2026-08-11)**: 与 `query_crafter/scripts/query_generator.py` 实现对齐：Query A 默认 All Metadata；Query B 逐项重复 `"Document Title":`；按 25 个 keyword/quoted-phrase values 自动拆分；条件生成 Query C；补齐 NEAR/ONEAR Query D 与自动化回归测试。
 - **V1.6 (2026-08-10)**: 对照 IEEE Xplore 官方 Command Search 帮助页（xplorestaging.ieee.org/Xplorehelp）修正语法口径——**字段名是可选限定符**（官方 Step 1：不写字段名则默认搜全部 metadata，运算符示例 `"wireless sensor network" AND security`、`implantable NEAR/3 cardiac` 均无字段名），不再强制"每个搜索词都带字段名"；保留官方明确禁止的写法（`"Document Title":("a" OR b)` 字段内括号 OR 无效）；Query A/D 模板改为官方风格（无字段名简洁写法 + 可选字段限定说明）；NEAR 用官方简单示例；25 terms 改官方原文口径。修正此前"逐词重复字段名"的过度泛化（V1.5），避免生成与官方风格脱节的查询。
 - **V1.5 (2026-08-10)**: 官网比对后修正 Command Search 语法——完整字段名列表、同字段 OR 禁止括号嵌套（需逐词重复字段名）、每子句 ≤25 terms、Command Search 无独立年份字段。**（注意：V1.5 将"同字段 OR 逐词重复字段名"过度泛化为"每个搜索词都必须带字段名"，与官方默认"无字段名=搜 metadata"矛盾，V1.6 已修正。）**
 
@@ -111,7 +112,7 @@ For exact-phrase matching, always quote the value: `"Document Title":"deep learn
 - The official IEEE Xplore Command Search field list has **no dedicated short year field**. Filter by year using the **left-side `Publication Year` filter** after running the query. Do NOT use a `"Publication Year":"2020"-"2025"` clause — it is not part of the official Command Search field list and may be rejected.
 
 **G. Limits & Constraints**
-- **Max 25 search terms per search clause**（官方原文："You can enter a maximum of 25 search terms per search clause"；短语内的单词分开计数，如 `"fiber bragg grating"` = 3 terms；运算符 AND/OR/NOT/NEAR/ONEAR 与字段名不计入）。
+- **Max 25 search terms per search clause**（官方原文："You can enter a maximum of 25 search terms per search clause"）。脚本按每个 keyword 或带引号的 phrase value 计 1 个 search term；字段名与 AND/OR/NOT/NEAR/ONEAR 不计入，并在输出前再次校验上限。
 - ⚠️ **Split broad queries to stay within 25 terms.** If your keyword tiers are large (e.g. a domain group of 4–5 terms plus a technology group of 4–5 terms plus an application group), a single query will exceed 25 terms. Split the application tier by sub-task (e.g. `broad_quality` / `broad_grading_online`) and/or trim each group greedily — never emit a query over 25 terms.
 - **同字段内禁止括号嵌套 OR**（官方原文）：`"Document Title":("radio frequency identification" OR rfid)` **无效**；正确写法是逐词重复字段名再用外层括号分组：`("Document Title":"radio frequency identification" OR "Document Title":rfid) AND scheduling`。
 - **无字段名的裸词/裸短语合法**（官方默认搜全部 metadata，见 A 节）——`("fish" OR "whole fish") AND ("spectral imaging" OR "hyperspectral imaging")` 是**合法且符合官方风格**的写法，不必给每个词加字段名。

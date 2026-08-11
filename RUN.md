@@ -1,5 +1,7 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
+版本：4.3.1（以根目录 VERSION 为准）
+
 ## 快速开始
 
 1. **入口**：对任意支持 Skill 的 Agent 说「**开始文献检索**」或「**Start QueryStrategist**」。
@@ -29,7 +31,7 @@ QueryStrategist/
 └── _shared_tools/               # 共享工具安装器
 ```
 
-> 本提交形态：**本地安装形态**——子模块指令文件为 `SKILL.md`，每个子模块可被注册为独立 Skill；主 Skill 按「子模块执行机制」读取执行。若需 Skills 广场单包上架形态（整个目录作为一个 Skill 上传，子模块为 `SKILL.sub.md`），见 `E:\QueryStrategist_SCP` 与 `build_scp_package.py`。
+> 开发仓库为本地安装形态；运行 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录>` 可重建 SCP 单包形态。发布目录只保留一个根包，不再保留外层旧模块副本。
 
 ## 关键脚本（Skill 内 `scripts/`）
 
@@ -40,6 +42,7 @@ QueryStrategist/
 | `_shared_tools` | `ensure_tool.py` | 开源工具检测/隔离安装（清华镜像直连） |
 | `_shared_tools` | `validate_skills.py` | 套件自校验（frontmatter 合规检查；路径自动推导，可在发布包内直接运行） |
 | `_shared_tools` | `build_ppt.py` | 参赛 PPT 生成（依赖 python-pptx） |
+| `_shared_tools` | `build_scp_package.py` | 从开发源确定性重建 SCP 单包 |
 
 ## 依赖安装
 
@@ -49,7 +52,7 @@ QueryStrategist/
 ## 外部 API（需外网，建议直连）
 
 - 运行收割脚本前如设置了代理环境变量，建议 `unset HTTP_PROXY HTTPS_PROXY` 走直连，避免代理不可用时导致连接失败。
-- 收割脚本已内置 **API 配额守卫**：请求预算、429 熔断、Retry-After 上限（≤20s）、响应缓存、逐通路落盘、`--dry-run` 冒烟测试。命中配额优雅停止并保存部分结果。
+- 收割脚本已内置 **API 配额守卫**：OpenAlex 默认 120 次、Crossref 默认 60 次请求预算；连续 3 次 429 熔断，Retry-After 最多等待 20 秒，按请求参数缓存响应，支持 `--dry-run`、`--min-year`、`--max-year`。预算可通过 `--openalex-budget` / `--crossref-budget` 或环境变量覆盖。
 
 ## 已知边界
 

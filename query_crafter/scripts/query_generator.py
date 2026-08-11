@@ -25,11 +25,14 @@ scope.json 结构:
     }
 
 输出: JSON {platform: query_string}（generate，单条宽泛式，向后兼容）。
-      --variants 时输出 {platform: [{variant,label,query}, ...]} 分层组合（宽泛/精准/多角度）。
+      --variants 时输出 {platform: [{variant,label,query}, ...]} 分层组合；IEEE 按
+      Command Search 25-term 上限自动拆分并生成 A/B/C/D/E 专属变体。
 """
 import argparse
 import json
+import re
 import sys
+from itertools import product
 
 
 def _join_terms(terms, op=" OR "):
@@ -172,16 +175,190 @@ def build_scopus(tiers, exclusions, warnings=None, broad=True):
     return core
 
 
-def build_ieee(tiers, exclusions, warnings=None, broad=True):
-    groups = _tier_groups(tiers)
-    field = '"Abstract"' if broad else '"Document Title"'
-    w = lambda g: f'{field}:({g})'
-    core = _broad_and(groups, w) if broad else " AND ".join(w(g) for g in groups)
-    q = f"(({core}))" if core else ""
+IEEE_MAX_SEARCH_TERMS = 25
+
+
+def _ieee_clean_terms(terms):
+    """去空、去重并保留原始顺序。"""
+    out = []
+    seen = set()
+    for term in terms or []:
+        value = str(term).strip()
+        if value and value not in seen:
+            out.append(value)
+            seen.add(value)
+    return out
+
+
+def _ieee_tiers(tiers):
+    return (
+        _ieee_clean_terms(_tier(tiers, "tier1_species_object", "tier1")),
+        _ieee_clean_terms(_tier(tiers, "tier2_technology_method", "tier2")),
+        _ieee_clean_terms(_tier(tiers, "tier3_application_task", "tier3")),
+    )
+
+
+def _ieee_quote(term):
+    value = str(term).strip()
+    if value.startswith('"') and value.endswith('"'):
+        return value
+    return f'"{value}"'
+
+
+def _ieee_group(terms, field=None):
+    """构造 IEEE OR 组；字段限定必须逐项重复，禁止 field:(A OR B)。"""
+    values = []
+    for term in terms:
+        value = _ieee_quote(term)
+        values.append(f'"{field}":{value}' if field else value)
+    return f"({' OR '.join(values)})" if values else ""
+
+
+def _ieee_query_term_count(query):
+    """按 Command Search 的 keyword/quoted-phrase value 统计 search terms。"""
+    without_fields = re.sub(r'"[^"\r\n]+"\s*:', "", query or "")
+    quoted = re.findall(r'"[^"\r\n]*"', without_fields)
+    remainder = re.sub(r'"[^"\r\n]*"', " ", without_fields)
+    tokens = re.findall(r"[A-Za-z0-9*?]+(?:-[A-Za-z0-9*?]+)*", remainder)
+    operators = {"AND", "OR", "NOT", "NEAR", "ONEAR"}
+    bare_terms = [t for t in tokens if t.upper() not in operators and not t.isdigit()]
+    return len(quoted) + len(bare_terms)
+
+
+def _ieee_chunks(values, size):
+    return [values[i:i + size] for i in range(0, len(values), size)] or [[]]
+
+
+def _ieee_split_queries(group_specs, exclusions, warnings=None):
+    """按 25-term 上限拆分查询；group_specs 为 (terms, optional_field) 列表。"""
+    groups = [(_ieee_clean_terms(terms), field)
+              for terms, field in group_specs if _ieee_clean_terms(terms)]
+    if not groups:
+        return []
+
     ex_terms = _guard_exclusions(exclusions, warnings, "ieee", allow_cjk=False)
-    if ex_terms:
-        q += " AND NOT (" + _fmt_excl_terms(ex_terms) + ")"
-    return q
+    omitted = []
+    while ex_terms:
+        ex_count = _ieee_query_term_count(_fmt_excl_terms(ex_terms))
+        if ex_count + len(groups) <= IEEE_MAX_SEARCH_TERMS:
+            break
+        omitted.insert(0, ex_terms.pop())
+    if omitted and warnings is not None:
+        warnings.append(("ieee", [f"term limit: exclusion omitted: {x}" for x in omitted]))
+
+    exclusion_query = _fmt_excl_terms(ex_terms)
+    exclusion_count = _ieee_query_term_count(exclusion_query)
+    available = IEEE_MAX_SEARCH_TERMS - exclusion_count
+    chunk_size = max(1, available // len(groups))
+    chunk_sets = [_ieee_chunks(terms, chunk_size) for terms, _ in groups]
+
+    queries = []
+    for selected in product(*chunk_sets):
+        parts = [_ieee_group(chunk, groups[i][1]) for i, chunk in enumerate(selected)]
+        query = " AND ".join(part for part in parts if part)
+        if exclusion_query:
+            query += f" NOT ({exclusion_query})"
+        if _ieee_query_term_count(query) > IEEE_MAX_SEARCH_TERMS:
+            raise ValueError("internal error: IEEE query exceeds the 25-term limit")
+        if query not in queries:
+            queries.append(query)
+    return queries
+
+
+def _ieee_core_queries(tiers, exclusions, warnings=None, field=None):
+    t1, t2, t3 = _ieee_tiers(tiers)
+    specs = [(t1, field), (t2, field), (t3, field)]
+    return _ieee_split_queries(specs, exclusions, warnings)
+
+
+def build_ieee(tiers, exclusions, warnings=None, broad=True):
+    """生成单条向后兼容 IEEE 查询；完整拆分集合由 generate_variants 输出。"""
+    field = None if broad else "Document Title"
+    queries = _ieee_core_queries(tiers, exclusions, warnings, field)
+    return queries[0] if queries else ""
+
+
+def _ieee_add_variants(rows, code, label, queries):
+    total = len(queries)
+    for index, query in enumerate(queries, 1):
+        suffix = f"_{index}" if total > 1 else ""
+        part = f"（拆分 {index}/{total}）" if total > 1 else ""
+        rows.append({"variant": f"{code}{suffix}", "label": f"{label}{part}", "query": query})
+
+
+def _ieee_proximity_queries(tiers, exclusions):
+    t1, t2, _ = _ieee_tiers(tiers)
+    pairs = []
+    for term in t2:
+        words = re.findall(r"[A-Za-z0-9*?]+(?:-[A-Za-z0-9*?]+)*", term)
+        if len(words) >= 2:
+            pairs.append((words[0], words[-1]))
+    if not t1 or not pairs:
+        return []
+
+    ex_terms = _guard_exclusions(exclusions, None, "ieee", allow_cjk=False)
+    exclusion_query = _fmt_excl_terms(ex_terms)
+    domain = list(t1)
+    clauses = []
+    for left, right in pairs:
+        candidate = clauses + [f"({left} NEAR/3 {right})"]
+        query = f"{_ieee_group(domain)} AND ({' OR '.join(candidate)})"
+        if exclusion_query:
+            query += f" NOT ({exclusion_query})"
+        while domain and _ieee_query_term_count(query) > IEEE_MAX_SEARCH_TERMS:
+            domain.pop()
+            query = f"{_ieee_group(domain)} AND ({' OR '.join(candidate)})"
+            if exclusion_query:
+                query += f" NOT ({exclusion_query})"
+        if not domain or _ieee_query_term_count(query) > IEEE_MAX_SEARCH_TERMS:
+            break
+        clauses = candidate
+
+    if not clauses:
+        return []
+    base = f"{_ieee_group(domain)} AND ({' OR '.join(clauses)})"
+    if exclusion_query:
+        base += f" NOT ({exclusion_query})"
+    ordered = base.replace(" NEAR/3 ", " ONEAR/3 ")
+    return [base, ordered]
+
+
+def _ieee_variants(scope, tiers, exclusions, warnings):
+    rows = []
+    broad = _ieee_core_queries(tiers, exclusions, warnings, field=None)
+    precise = _ieee_core_queries(tiers, exclusions, None, field="Document Title")
+    _ieee_add_variants(rows, "broad", "IEEE A·宽泛检索（All Metadata）", broad)
+    _ieee_add_variants(rows, "precise", "IEEE B·标题高精度检索", precise)
+
+    publication_titles = (
+        scope.get("ieee_publication_titles")
+        or scope.get("target_conferences")
+        or scope.get("target_publications")
+        or []
+    )
+    if isinstance(publication_titles, str):
+        publication_titles = [publication_titles]
+    t1, t2, _ = _ieee_tiers(tiers)
+    if publication_titles:
+        conference = _ieee_split_queries(
+            [(t1, None), (t2, None), (publication_titles, "Publication Title")],
+            exclusions,
+            None,
+        )
+        _ieee_add_variants(rows, "conference", "IEEE C·会议/出版物定向", conference)
+
+    proximity = _ieee_proximity_queries(tiers, exclusions)
+    labels = ["IEEE D1·无序邻近检索（NEAR）", "IEEE D2·有序邻近检索（ONEAR）"]
+    for index, query in enumerate(proximity):
+        rows.append({"variant": f"proximity_{index + 1}", "label": labels[index], "query": query})
+
+    review = _ieee_split_queries(
+        [(t1, None), (t2, None), (["review", "survey"], None)],
+        exclusions,
+        None,
+    )
+    _ieee_add_variants(rows, "review", "IEEE E·综述导向", review)
+    return rows
 
 
 def _gs_term(t):
@@ -328,6 +505,24 @@ BUILDERS = {
 }
 
 
+def _strategy_priority(writing_type):
+    value = str(writing_type or "").lower()
+    if any(term in value for term in ("研究论著", "实验研究", "research")):
+        return "precision-priority"
+    if any(term in value for term in ("开题", "基金", "proposal", "grant")):
+        return "novelty-priority"
+    if any(term in value for term in ("综述", "review")):
+        return "review-priority"
+    return "balanced"
+
+
+def _chinese_enabled(value):
+    if isinstance(value, bool):
+        return value
+    normalized = str(value or "").strip().lower()
+    return normalized not in ("", "no", "false", "0", "否", "不需要")
+
+
 def generate(scope, platforms=None, warnings=None):
     """返回 {platform: query_string}（单条宽泛式，向后兼容）。warnings 收集排除项告警。"""
     tiers = scope.get("keyword_tiers", {})
@@ -354,7 +549,7 @@ _REVIEW_SUFFIX = {
 
 
 def generate_variants(scope, platforms=None, warnings=None):
-    """为每个平台生成 3–5 个不同层次检索式组合，覆盖宽泛/精准/多角度。
+    """生成平台专属检索式组合；IEEE 会按官方 term 上限拆分。
 
     返回结构：{platform: [ {"variant","label","query"}, ... ]}
       - broad      : 宽泛检索（高召回）—— 领域层 AND (技术层 OR 应用层)
@@ -374,6 +569,9 @@ def generate_variants(scope, platforms=None, warnings=None):
     out = {}
     for p in platforms:
         if p not in BUILDERS:
+            continue
+        if p == "ieee":
+            out[p] = _ieee_variants(scope, tiers, exclusions, warnings)
             continue
         # Google Scholar 受 256 字符硬上限约束，用专用互补切分生成 5 条不同变体
         if p == "google_scholar":
@@ -449,7 +647,14 @@ def main():
     ap.add_argument("--platforms", nargs="+", help="指定平台 (wos scopus ieee google_scholar cnki wanfang)")
     ap.add_argument("--all", action="store_true", help="生成全部 6 个平台")
     ap.add_argument("--variants", action="store_true",
-                    help="生成每平台 3-5 个分层检索式组合（宽泛/精准/多角度）")
+                    help="生成平台专属分层检索式组合（IEEE 自动拆分并含邻近检索）")
+    ap.add_argument("--package", action="store_true",
+                    help="输出 context + queries 包，保留写作类型、时间跨度和平台启用信息")
+    ap.add_argument("--writing-type", help="写作类型，用于标注查全/查准/新颖性权重")
+    ap.add_argument("--min-year", type=int, help="最早发表年份（传给各数据库筛选说明）")
+    ap.add_argument("--max-year", type=int, help="最晚发表年份（传给各数据库筛选说明）")
+    ap.add_argument("--chinese-supplement", choices=["yes", "no"],
+                    help="是否启用 CNKI + Wanfang；未指定时读取 scope.project_config/config")
     ap.add_argument("--t1", nargs="*", default=[], help="tier1 关键词")
     ap.add_argument("--t2", nargs="*", default=[], help="tier2 关键词")
     ap.add_argument("--t3", nargs="*", default=[], help="tier3 关键词")
@@ -472,17 +677,43 @@ def main():
         print("[demo] 未提供参数，使用示例 scope:\n")
         scope = _demo_scope()
 
-    platforms = None if (args.all or not args.platforms) else args.platforms
+    project_config = scope.get("project_config") or scope.get("config") or {}
+    writing_type = args.writing_type or project_config.get("writing_type")
+    time_span = project_config.get("literature_time_span") or {}
+    min_year = args.min_year if args.min_year is not None else time_span.get("start")
+    max_year = args.max_year if args.max_year is not None else time_span.get("end")
+    chinese_value = args.chinese_supplement
+    if chinese_value is None:
+        chinese_value = project_config.get("chinese_language_supplement")
+    if args.platforms:
+        platforms = args.platforms
+    elif args.all:
+        platforms = None
+    elif chinese_value is not None and not _chinese_enabled(chinese_value):
+        platforms = ["wos", "scopus", "ieee", "google_scholar"]
+    else:
+        platforms = None
     if args.variants:
         result = generate_variants(scope, platforms)
         # 扁平化为可读列表
         flat = {}
         for p, vs in result.items():
             flat[p] = [{"variant": v["variant"], "label": v["label"], "query": v["query"]} for v in vs]
-        print(json.dumps(flat, ensure_ascii=False, indent=2))
+        payload = flat
     else:
-        result = generate(scope, platforms)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        payload = generate(scope, platforms)
+    if args.package:
+        payload = {
+            "context": {
+                "writing_type": writing_type,
+                "strategy_priority": _strategy_priority(writing_type),
+                "time_span": {"start": min_year, "end": max_year},
+                "chinese_supplement": _chinese_enabled(chinese_value),
+                "platforms": list(payload.keys()),
+            },
+            "queries": payload,
+        }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

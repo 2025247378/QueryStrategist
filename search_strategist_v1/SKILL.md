@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.20
+  version: 1.21
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -23,7 +23,7 @@ metadata:
 This skill is part of the **QueryStrategist** workflow (V2.0, Step 2). It receives the Review Scope Confirmation Document from Scope Definer and performs the first round of literature retrieval, focusing primarily on **review articles**, delivering the search strategy pack as the pipeline's final output.
 
 ## Version
-V1.20
+ V1.21
 
 ## Change Log
 - **V1.20（2026-08-10 OA 简化）**: OA 状态改为**收割时直接附带**（用户决策）——OpenAlex 收割响应原生携带 `open_access` 字段，`harvest.py`（V2.1）通过 `select=open_access` 一次请求同时拿到 `is_oa` / `oa_status`，**零额外 API 调用、零额外错误点**。原 V1.17 的 `scripts/enrich_oa.py` 逐篇回查 OpenAlex open_access 方案**已废弃删除**（脚本、回查字段、回查容错分支全部移除），不再有独立回查环节。
@@ -67,6 +67,7 @@ The **Review Scope Confirmation Document** from Scope Definer, which includes:
 The **Project Configuration Profile** from Setup Wizard, which includes:
 - Target Language
 - Literature Time Span
+- Writing Type and its strategy weighting
 - Whether Chinese-Language Supplement is enabled
 - Whether Industry Report Supplement is enabled
 
@@ -76,7 +77,7 @@ The **Project Configuration Profile** from Setup Wizard, which includes:
 Confirm receipt of the Review Scope Confirmation Document. Briefly restate the core research direction and keyword tiers to demonstrate understanding. Then explain the dual-pathway approach to the user:
 
 > ""I have received your review scope. I will now execute two parallel retrieval pathways:
-> - **Search A**: I will call **Query Crafter** to generate ready-to-use advanced search queries for Web of Science, Scopus, IEEE Xplore, Google Scholar, and CNKI (if enabled).
+> - **Search A**: I will call **Query Crafter** to generate ready-to-use advanced search queries for Web of Science, Scopus, IEEE Xplore, Google Scholar, CNKI, and Wanfang (the Chinese databases are enabled by configuration).
 > - **Search B**: I will call **Literature Harvester** to harvest literature metadata from **OpenAlex** and **cross-verify each entry via Crossref by DOI** (filtering out hallucinated/mis-attributed entries — zero keys required).
 >
 > This first round focuses on **review articles** (reviews, surveys, state-of-the-art papers) to provide a comprehensive landscape for topic discovery in the next step. Both pathways will run simultaneously. Let me begin.""
@@ -102,8 +103,8 @@ Confirm receipt of the Review Scope Confirmation Document. Briefly restate the c
 **⚠️ CRITICAL (No Phantom Actions):** "Invoke the Query Crafter sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue the `Skill` tool call for `query_crafter` in this turn — do NOT merely write "loading Query Crafter" and stop. Invoke the **Query Crafter** sub-skill with the following parameters:
 - Three keyword tiers from the Review Scope Confirmation Document
 - Exclusion keywords (if any)
-- Literature time span from the Project Configuration Profile
-- Search focus: `review-priority` (prioritize review articles)
+- Literature time span from the Project Configuration Profile as structured `start` / `end` years
+- Writing type and derived search focus (`review-priority`, `precision-priority`, `novelty-priority`, or balanced)
 
 Query Crafter will automatically activate the appropriate platform-specific sub-skills:
 - `WoS Query Crafter` (always active)
@@ -111,14 +112,15 @@ Query Crafter will automatically activate the appropriate platform-specific sub-
 - `IEEE Query Crafter` (always active)
 - `Google Scholar Query Crafter` (always active)
 - `CNKI Query Crafter` (active only if Chinese-Language Supplement is enabled)
+- `Wanfang Query Crafter` (active only if Chinese-Language Supplement is enabled)
 
 Receive the compiled multi-platform query package from Query Crafter.
 
 ### Step 3: Execute Search B — Literature Harvester
 **⚠️ CRITICAL (No Phantom Actions):** "invoke the Literature Harvester sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue the `Skill` tool call for `literature_harvester` in this turn — do NOT merely write "先加载 Literature Harvester 子技能…" and stop. Simultaneously with Step 2, invoke the **Literature Harvester** sub-skill with the following parameters:
 - Three keyword tiers
-- Literature time span
-- Search focus: `review-priority` (prioritize review articles)
+- Literature time span as `min_year` / `max_year`
+- Writing type and derived search focus
 - Results limit: 20–25 per sub-query
 - `verify`: `True` (default) — Crossref 逐条验证开启
 - `mailto`: optional real email for Crossref polite pool (10 req/s); empty → anonymous public pool (5 req/s)
@@ -213,10 +215,11 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
     "search_focus": "review-priority",
-    "time_span": {"start": YYYY, "end": YYYY},
+  "time_span": {"start": YYYY, "end": YYYY},
+  "writing_type": "综述",
     "core_keywords": {"tier1_species": [...], "tier2_technology": [...], "tier3_application": [...]}
   },
-  "part_a_databases": ["WoS", "Scopus", "IEEE", "Google Scholar", "CNKI"],
+  "part_a_databases": ["WoS", "Scopus", "IEEE", "Google Scholar", "CNKI", "Wanfang"],
   "part_b_statistics": {
     "harvested_count": N,
     "verified_count": N,
@@ -258,7 +261,7 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 1. **读取上游产物**：Step 0 `project_meta.json`（写作类型 / 目标语言 / 目标期刊 / 时间跨度）、Step 1 `scope_definition.md`（三级关键词 + 排除项 + 优先级）、Step 5 保存的 `literature_collection_report_v1.md` + `literature_collection_v1_metadata.json`。
 2. **按模板落盘四件套**（到 Step 5 用户指定的目录）：
    - `scope_card.md` — 写作类型与策略权重、三级关键词、排除项、优先级、G0–G1 确认记录（全部标注【继承自 …】）；
-   - `query_pack.md` — Part A 的 6 库检索式合集（每库查全式 A + 查准式 B），注明每库使用说明；
+    - `query_pack.md` — Part A 的已启用平台检索式合集（最多 6 库；启用中文补充时包含 CNKI + Wanfang），每库查全式 A + 查准式 B，注明每库使用说明；
    - `candidate_list.csv/.md` — Part B 收割的候选文献（去重 + OA 状态 + 可点击 DOI 链接），按写作类型排序；
    - `usage_guide.md` — 使用说明：如何到各平台验证检索式、如何筛选下载 PDF、写作类型对应的策略权重。
 3. **显示 G2 门控**（用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号）：

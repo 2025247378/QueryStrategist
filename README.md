@@ -2,6 +2,7 @@
 
 > **定位**：基于 LLM 的交互式文献检索系统，通过结构化提问把模糊科研意图转化为高精度专业检索策略。面向综述、研究论著、学位论文、开题报告、基金申请、调研报告等各类文献写作场景。
 > **核心价值**：一句话模糊意图 → 6 大数据库精准检索式 + API 收割的文献候选清单，即拿即用。不是帮你搜，是帮你把「搜的策略」做对。
+> **版本**：4.3.1（2026-08-11）
 
 ---
 
@@ -19,7 +20,7 @@
 
 ## 2. 方案概述
 
-流水线由状态机主控（根 `SKILL.md`，即主 Skill / 编排器）按 **Step 0–2** 顺序串联 3 个子模块，每步结束设强制人工确认门（G0–G2）。**本提交为本地安装形态**：每个子模块目录内含 `SKILL.md`，可被 WorkBuddy / Skills 平台注册为独立 Skill；主 Skill 按「子模块执行机制」优先读取子模块指令文件（`SKILL.md`；若为 SCP 单包形态则为 `SKILL.sub.md`）并真实执行。
+流水线由状态机主控（根 `SKILL.md`，即主 Skill / 编排器）按 **Step 0–2** 顺序串联 3 个子模块，每步结束设强制人工确认门（G0–G2）。开发仓库使用本地安装形态（子模块为 `SKILL.md`）；`build_scp_package.py` 会生成 SCP 单包形态（根入口保留 `SKILL.md`，子模块转换为 `SKILL.sub.md`）。
 
 | Step | 子 Skill | 关键产出 | 主导方 |
 |:--:|:--|:--|:--:|
@@ -38,7 +39,7 @@
 3. **双通道检索**：Search A 产出可手填的 6 库检索式，Search B 调公开 API 自动收割元数据，两条通道互为校验。
 4. **人机闸门（负责任 AI）**：3 个强制决策门（G0–G2），AI 只呈客观事实与策略，范围与检索策略确认始终由人类掌握。
 5. **零密钥、去幻觉的 API 收割**：Literature Harvester 以 **OpenAlex 为唯一收割源**（无 key），**Crossref 按 DOI 逐条回查验证**（title 相似度≥0.8 且年份差≤1），验证不通过的疑似幻觉/错配条目直接标记 `dropped` 剔除，从机制上杜绝 AI 编造文献混入候选清单。
-6. **API 配额守卫（MANDATORY）**：所有收割脚本内置请求预算、429 熔断、Retry-After 上限、响应缓存、逐通路落盘。
+6. **API 配额守卫（MANDATORY）**：收割脚本内置分端点请求预算、429 熔断、Retry-After 上限、响应缓存、dry-run 与失败统计。
 7. **跨源去重与相关性护栏**：收割层做跨库元数据归一、DOI 去重；高噪声语料按领域相关词过滤，显著提升信噪比。
 
 ---
@@ -59,7 +60,7 @@
 ## 5. 使用方式
 
 - **完整流程**：调用根 `SKILL.md`（主 Skill），Step 0 先配置写作类型与目标语言/期刊，Step 1 收敛范围（G1 确认），Step 2 双通道检索并交付检索策略包（G2 确认）。子模块按「读取 `SKILL.md` → 执行」机制调用（SCP 单包形态下为 `SKILL.sub.md`）。
-- **单步使用**：任一字模块可单独执行（如直接要某数据库检索式，读取对应 `xxx_query_crafter/SKILL.md` 执行；只做范围界定，直接读 `scope_definer/SKILL.md`）。子模块均可作为独立 Skill 被直接调用。
+- **单步使用**：任一子模块可单独执行（如直接要某数据库检索式，读取对应 `xxx_query_crafter/SKILL.md` 执行；只做范围界定，直接读 `scope_definer/SKILL.md`）。子模块均可作为独立 Skill 被直接调用。
 
 ---
 
@@ -70,7 +71,7 @@ QueryStrategist/
 ├── LICENSE                                  # MIT
 ├── README.md                                # 本文件
 ├── RUN.md                                   # 运行入口与代码清单
-├── SKILL.md                                 # 主 Skill（编排器入口，唯一 SKILL.md）
+├── SKILL.md                                 # 主 Skill（编排器根入口）
 ├── setup_wizard/                            # Step 0  写作类型 + 配置（指令: SKILL.md）
 ├── scope_definer/                           # Step 1  三级关键词 + 排除项
 ├── search_strategist_v1/                    # Step 2  双通道检索（终点）
@@ -85,7 +86,7 @@ QueryStrategist/
 └── _shared_tools/                           # 共享工具（ensure_tool.py / validate_skills.py / build_ppt.py）
 ```
 
-> 每个子模块目录均含 `SKILL.md`（本地安装形态，可直接注册为独立 Skill）+ 骨架 `scripts/` `references/` `assets/`。若需 Skills 广场单包上架形态（子模块为 `SKILL.sub.md`、整个目录作为一个 Skill 上传），见 `E:\QueryStrategist_SCP`（单包构建脚本 `build_scp_package.py`）。
+> 每个子模块目录均含 `SKILL.md`（本地安装形态，可直接注册为独立 Skill）及所需资源。SCP 发布包由 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录>` 确定性生成，不再手工同步副本。
 
 ---
 
@@ -114,7 +115,7 @@ QueryStrategist/
 - **交付闭环**：本工具交付「可追溯的检索策略包」——研究者可直接把检索式填入各平台、按候选清单下载文献；所有检索策略均绑定真实范围界定与收割记录。
 - **收割 ≠ 语料**：API 收割的元数据仅作候选清单，绝不自动进入下游当作全文语料；需用户自行下载验证。
 - **检索策略需平台验证**：检索式命中量级为预估，最终以各数据库实际检索结果为准；AI 不替用户做纳入决定。
-- **未来方向**：在检索策略之上，扩展按写作类型的策略调优，但始终坚守「收割 ≠ 语料」与「人类把关」两条红线。
+- **当前边界**：本版本已经包含按写作类型调节检索策略权重；后续扩展仍须坚守「收割 ≠ 语料」与「人类把关」两条红线。
 
 ---
 

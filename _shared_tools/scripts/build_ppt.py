@@ -152,7 +152,7 @@ bullets(s, [
     ("跨库构建重复：WoS / Scopus / IEEE / Google Scholar / CNKI / 万方语法各异，逐库构建耗时数天", 0),
     ("策略缺依据：候选文献常凭经验筛，缺少跨库收割的量化覆盖与 OA 状态佐证", 0),
     ("价值主张", 0, ACCENT),
-    ("将检索策略前期工作封装为 12 个标准化 Skill，可独立调用也可串联", 1),
+    ("将检索策略前期工作封装为 1 个主 Skill + 11 个子模块，可独立调用也可串联", 1),
     ("人类掌舵、AI 执行：AI 规模化执行（关键词收敛、检索式生成、跨库收割），人类在决策门拍板", 1),
     ("最终交付检索策略包四件套：范围卡 + 6 库检索式 + 候选清单 + 使用说明", 1),
 ])
@@ -165,7 +165,7 @@ bullets(s, [
     ("3 个决策门（G0–G2）强制人工确认，AI 不越权做价值判断", 0),
     ("双通道检索", 0, TEAL),
     ("Search A：手工检索式（6 大库：WoS / Scopus / IEEE / Google Scholar / CNKI / 万方，每库查全式 A + 查准式 B）", 1),
-    ("Search B：API 自动收割（OpenAlex / Crossref / 书生 Scholar-KG id 42）", 1),
+    ("Search B：API 自动收割（OpenAlex 收割 + Crossref 按 DOI 验证）", 1),
     ("按写作类型调策略权重：综述查全 / 论著查准 / 开题基金新颖性", 0, ACCENT),
 ])
 
@@ -209,17 +209,15 @@ placeholder(s, 0.55, 4.55, 12.2, 1.7, "终点交付：检索策略包四件套�
 s = content_slide("核心能力：已实装可运行脚本", "超越纯提示词——关键机械化环节已封装为 Python，开箱即用")
 bullets(s, [
     ("检索式生成  query_generator.py（零依赖）— 6 大库高级检索式一键产出（broad / precise / angle_tech / angle_app / review）", 0),
-    ("文献收割  harvest.py — OpenAlex / Crossref / Scholar-KG，含配额守卫（429 熔断 / 缓存 / 逐通路落盘）", 0),
-    ("OA 富集  enrich_oa.py — DOI 回查 OpenAlex OA 状态，候选清单标注 gold / closed / 未知", 0),
+    ("文献收割  harvest.py — OpenAlex / Crossref，含配额守卫（预算 / 429 熔断 / 缓存 / dry-run）", 0),
     ("工具安装  ensure_tool.py — 开源工具检测/隔离安装（镜像直连，绕过 venv 回滚）", 0),
     ("策略包模板  search_strategy_pack_template.md — 范围卡 / 检索式合集 / 候选清单 / 使用说明标准结构", 0, ACCENT),
-    ("原生集成书生 Scholar-KG（id 42）— 在承办比赛的平台生态内直接检索增强", 0, TEAL),
 ])
 
 # ============ SLIDE 6 — Tech stack ============
 s = content_slide("技术实现与工具链", "零外部模型依赖 · 直接引用不改写 · 全链路可追溯")
 bullets(s, [
-    ("收割：OpenAlex / Crossref / 书生 Scholar-KG（id 42）公开 API（网络）", 0),
+    ("收割：OpenAlex / Crossref 公开 API（网络；Crossref 仅按 DOI 做一致性验证）", 0),
     ("质量参考：SJR 期刊分级（CC BY-NC 4.0，用户自行下载，不随仓库分发）", 0),
     ("导出：openpyxl（MIT）文档与表格", 0),
     ("检索式：6 平台高级检索语法（WoS / Scopus / IEEE / Google Scholar / CNKI / 万方）", 0),
@@ -234,9 +232,8 @@ bullets(s, [
     ("决策门强制人工确认（G0–G2），杜绝 AI 越权替人类决定纳入哪些文献", 0),
     ("按写作类型调检索策略权重（综述查全 / 论著查准 / 开题基金新颖性）——比数据库自带 Query Builder 强的核心差异", 0),
     ("可追溯证据链：检索策略包每个字段标注上游出处（范围卡 = 检索式依据 = 候选清单口径）", 0),
-    ("原生集成书生 Scholar-KG（id 42），在承办比赛的平台生态内生长", 0, TEAL),
     ("零外部模型依赖（Step 0–2 仅内置 LLM），开箱即用、易部署", 0),
-    ("12 个 Skill 完全自包含，含可运行 scripts/，可整体也可单步使用", 0),
+    ("1 个主 Skill + 11 个子模块完全自包含，含可运行 scripts/，可整体也可单步使用", 0),
 ])
 
 # ============ SLIDE 8 — Scenarios ============
@@ -255,11 +252,11 @@ s = content_slide("知识产权与合规", "开源可复用 · 第三方数据�
 bullets(s, [
     ("源码 MIT 开源，允许学习、修改、再分发（见 LICENSE）", 0),
     ("SJR 期刊质量数据集为 CC BY-NC 4.0（不可商用），不随仓库分发，用户自行下载", 0),
-    ("12 个 Skill 完全自包含，目录遵循 skill-name/{SKILL.md, scripts/, references/, assets/}", 0),
+    ("1 个主 Skill + 11 个子模块完全自包含，目录遵循统一资源布局", 0),
     ("参赛亮点（面向专家评审）", 0, ACCENT),
     ("完整可运行：4 个脚本化能力 + 双通道检索 + 策略包四件套模板，非纯提示词", 1),
     ("方法学严谨：决策门 + 上游上下文继承 + 证据链，降低 AI 幻觉与越权", 1),
-    ("六类写作类型适配 + 原生 Scholar-KG：呼应 AI4SS 赛道与平台生态", 1),
+    ("六类写作类型适配 + 6 平台检索式生成：覆盖多种科研写作场景", 1),
 ])
 
 # ============ SLIDE 10 — Closing ============

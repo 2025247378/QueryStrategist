@@ -6,3 +6,19 @@ __pycache__/
 # 编辑器/系统
 .DS_Store
 Thumbs.db
+
+# 本地环境、密钥与运行产物
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.token
+*.log
+.cache/
+.workbuddy/
+projects/
+harvest*.json
+literature_collection*.json
+literature_collection*.md
+candidate_list.*

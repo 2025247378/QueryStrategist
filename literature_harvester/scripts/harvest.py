@@ -33,12 +33,14 @@ Search B 通道：OpenAlex 收割 + Crossref 逐条验证（去幻觉）。
     或运行 `python harvest.py --check-deps` 预检。
 """
 import argparse
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
 import time
+from urllib.parse import urlencode
 from difflib import SequenceMatcher
 
 # ---------------------------------------------------------------------------
@@ -93,44 +95,138 @@ def _load_third_party():
         globals()["requests"] = None
 
 
-# 模块导入即自举（除非设置 HARVEST_NO_BOOTSTRAP=1 关闭）；随后加载第三方依赖。
-_BOOTSTRAP_INSTALLED = []
-if not os.environ.get("HARVEST_NO_BOOTSTRAP") == "1":
-    try:
-        _m, _i = ensure_deps()
-        _BOOTSTRAP_INSTALLED = _i
-    except Exception:
-        pass
+# 导入模块时只探测现有依赖，不执行 pip 或网络操作。
 _load_third_party()
 
 
-UA_BASE = "AI-for-Review-Harvester/2.1"
+UA_BASE = "QueryStrategist-Harvester/2.2"
+
+
+class RequestBudgetExceeded(RuntimeError):
+    """请求预算耗尽或端点熔断。"""
+
+
+class RequestBudget:
+    """管理单次运行的端点请求预算与连续 429 熔断状态。"""
+
+    def __init__(self, limits=None):
+        self.limits = {
+            "openalex": int(os.environ.get("HARVEST_OPENALEX_BUDGET", "120")),
+            "crossref": int(os.environ.get("HARVEST_CROSSREF_BUDGET", "60")),
+        }
+        if limits:
+            self.limits.update({k: int(v) for k, v in limits.items() if v is not None})
+        self.used = {key: 0 for key in self.limits}
+        self.consecutive_429 = {key: 0 for key in self.limits}
+        self.circuit_open = {key: False for key in self.limits}
+
+    def reserve(self, endpoint):
+        if self.circuit_open.get(endpoint):
+            raise RequestBudgetExceeded(f"{endpoint} 端点已因连续 429 熔断")
+        if self.used.get(endpoint, 0) >= self.limits.get(endpoint, 0):
+            raise RequestBudgetExceeded(
+                f"{endpoint} 请求预算已用尽（{self.used[endpoint]}/{self.limits[endpoint]}）"
+            )
+        self.used[endpoint] = self.used.get(endpoint, 0) + 1
+
+    def record(self, endpoint, status):
+        if status == 429:
+            self.consecutive_429[endpoint] = self.consecutive_429.get(endpoint, 0) + 1
+            if self.consecutive_429[endpoint] >= 3:
+                self.circuit_open[endpoint] = True
+        else:
+            self.consecutive_429[endpoint] = 0
+
+    def summary(self):
+        return {
+            endpoint: {
+                "used": self.used.get(endpoint, 0),
+                "limit": self.limits.get(endpoint, 0),
+                "consecutive_429": self.consecutive_429.get(endpoint, 0),
+                "circuit_open": self.circuit_open.get(endpoint, False),
+            }
+            for endpoint in self.limits
+        }
+
+
+_ACTIVE_BUDGET = None
+_ACTIVE_CACHE_DIR = None
+
+
+def _endpoint_for_url(url):
+    return "crossref" if "api.crossref.org" in url else "openalex"
+
+
+def _cache_path(url, params):
+    if not _ACTIVE_CACHE_DIR:
+        return None
+    query = urlencode(sorted((str(k), str(v)) for k, v in (params or {}).items()))
+    key = hashlib.sha256(f"{url}?{query}".encode("utf-8")).hexdigest()
+    return os.path.join(_ACTIVE_CACHE_DIR, f"{key}.json")
+
+
+def _read_cache(path):
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _write_cache(path, payload):
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temp = f"{path}.{os.getpid()}.tmp"
+    with open(temp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+    os.replace(temp, path)
 
 
 def _get(url, params, headers=None, timeout=20, max_retries=4, user_agent=None):
-    """带指数退避的请求；只对 429/5xx 重试，4xx（不含 429）直接报错不浪费时间。"""
+    """带预算、缓存、429 熔断与有上限退避的 JSON GET。"""
     if requests is None:
         raise RuntimeError("缺少依赖 requests，请先 pip install requests")
+    endpoint = _endpoint_for_url(url)
+    cache = _cache_path(url, params)
+    cached = _read_cache(cache)
+    if cached is not None:
+        return cached
     ua = user_agent or UA_BASE
     h = {"User-Agent": ua}
     if headers:
         h.update(headers)
-    backoff = 2
     last_err = None
     for attempt in range(max_retries):
         try:
+            if _ACTIVE_BUDGET is not None:
+                _ACTIVE_BUDGET.reserve(endpoint)
             r = requests.get(url, params=params, headers=h, timeout=timeout)
+            if _ACTIVE_BUDGET is not None:
+                _ACTIVE_BUDGET.record(endpoint, r.status_code)
             # 400/403/404 等客户端错误 — 重试也无效，直接退出
             if 400 <= r.status_code < 500 and r.status_code != 429:
                 r.raise_for_status()  # 不会走到 return 之后，直接抛 HTTPError
             if r.status_code in (429, 500, 502, 503, 504):
                 last_err = f"HTTP {r.status_code}"
-                wait = backoff * (2 ** attempt)
+                retry_after = r.headers.get("Retry-After")
+                try:
+                    retry_after = float(retry_after)
+                except (TypeError, ValueError):
+                    retry_after = 0
+                wait = min(20, max(retry_after, min(40, 2 * (2 ** attempt))))
+                if _ACTIVE_BUDGET is not None and _ACTIVE_BUDGET.circuit_open.get(endpoint):
+                    raise RequestBudgetExceeded(f"{endpoint} 连续 3 次 429，已熔断")
                 print(f"  [retry {attempt+1}/{max_retries}] {last_err}，{wait}s 后重试…", flush=True)
-                time.sleep(wait)
+                if os.environ.get("HARVEST_NO_SLEEP") != "1":
+                    time.sleep(wait)
                 continue
             r.raise_for_status()
-            return r.json()
+            payload = r.json()
+            _write_cache(cache, payload)
+            return payload
         except requests.RequestException as e:
             # 区分：如果是 4xx（不含 429）的 HTTPError，不再重试
             if isinstance(e, requests.HTTPError) and e.response is not None:
@@ -138,13 +234,14 @@ def _get(url, params, headers=None, timeout=20, max_retries=4, user_agent=None):
                 if 400 <= sc < 500 and sc != 429:
                     raise RuntimeError(f"客户端错误 HTTP {sc}（不重试）: {e}")
             last_err = str(e)
-            wait = backoff * (2 ** attempt)
+            wait = min(40, 2 * (2 ** attempt))
             print(f"  [retry {attempt+1}/{max_retries}] {e}，{wait}s 后重试…", flush=True)
-            time.sleep(wait)
+            if os.environ.get("HARVEST_NO_SLEEP") != "1":
+                time.sleep(wait)
     raise RuntimeError(f"请求失败（已重试 {max_retries} 次）: {last_err}")
 
 
-def harvest_openalex(query, per_platform=20):
+def harvest_openalex(query, per_platform=20, min_year=None, max_year=None):
     """OpenAlex 简单检索（search= 全字段匹配），返回标准文献列表。
 
     收割时通过 `select=open_access` 一次性附带 OA 状态（is_oa / oa_status），
@@ -156,6 +253,13 @@ def harvest_openalex(query, per_platform=20):
         "per_page": per_platform,
         "select": "title,display_name,authorships,publication_year,doi,cited_by_count,id,primary_location,open_access",
     }
+    if min_year or max_year:
+        filters = []
+        if min_year:
+            filters.append(f"from_publication_date:{int(min_year)}-01-01")
+        if max_year:
+            filters.append(f"to_publication_date:{int(max_year)}-12-31")
+        params["filter"] = ",".join(filters)
     data = _get(url, params)
     out = []
     for w in data.get("results", []):
@@ -176,7 +280,7 @@ def harvest_openalex(query, per_platform=20):
 
 
 def harvest_openalex_filtered(species_terms, tech_terms, feed_terms,
-                               per_platform=25, min_year=2016,
+                               per_platform=25, min_year=2016, max_year=None,
                                exclude_terms=None):
     """OpenAlex 字段限定搜索 — 三块强制共现，大幅提升精确率。
 
@@ -215,6 +319,8 @@ def harvest_openalex_filtered(species_terms, tech_terms, feed_terms,
             f'title_and_abstract.search:{_grp(tech_terms)},'
             f'title_and_abstract.search:{_grp(feed_terms)},'
             f'from_publication_date:{min_year}-01-01')
+    if max_year:
+        filt += f",to_publication_date:{int(max_year)}-12-31"
 
     params = {
         "filter": filt,
@@ -375,7 +481,8 @@ def verify_openalex_results(papers, mailto=None, skip_verify=False):
     return kept, dropped
 
 
-def harvest(query, per_platform=20, verify=True, mailto=None):
+def harvest(query, per_platform=20, verify=True, mailto=None,
+            min_year=None, max_year=None, cache_dir=None, budgets=None):
     """OpenAlex 收割 + Crossref 逐条验证（Search B 精简两源版）。
 
     Args:
@@ -394,9 +501,14 @@ def harvest(query, per_platform=20, verify=True, mailto=None):
           "statistics": {...}      # 各状态计数
         }
     """
-    result = {"query": query, "openalex": [], "verified": [], "unverified": [], "dropped": []}
+    global _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR
+    previous_budget, previous_cache = _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR
+    _ACTIVE_BUDGET = RequestBudget(budgets)
+    _ACTIVE_CACHE_DIR = None if cache_dir is False else (cache_dir or os.environ.get(
+        "HARVEST_CACHE_DIR", os.path.join(os.path.expanduser("~"), ".cache", "querystrategist")))
+    result = {"query": query, "openalex": [], "verified": [], "unverified": [], "dropped": [], "errors": []}
     try:
-        papers = harvest_openalex(query, per_platform)
+        papers = harvest_openalex(query, per_platform, min_year=min_year, max_year=max_year)
         result["openalex"] = papers
         kept, dropped = verify_openalex_results(papers, mailto=mailto, skip_verify=not verify)
         result["dropped"] = dropped
@@ -408,9 +520,21 @@ def harvest(query, per_platform=20, verify=True, mailto=None):
             "unverified": len(result["unverified"]),
             "dropped": len(dropped),
             "verify_enabled": bool(verify),
+            "request_budget": _ACTIVE_BUDGET.summary(),
         }
     except Exception as e:
         result["openalex_error"] = str(e)
+        result["errors"].append({"stage": "openalex_or_verify", "error": str(e)})
+        result["statistics"] = {
+            "harvested": len(result["openalex"]),
+            "verified": len(result["verified"]),
+            "unverified": len(result["unverified"]),
+            "dropped": len(result["dropped"]),
+            "verify_enabled": bool(verify),
+            "request_budget": _ACTIVE_BUDGET.summary(),
+        }
+    finally:
+        _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR = previous_budget, previous_cache
     return result
 
 
@@ -422,6 +546,8 @@ def main():
     ap = argparse.ArgumentParser(description="QueryStrategist 文献收割器（OpenAlex + Crossref 验证）")
     ap.add_argument("--query", help="检索词")
     ap.add_argument("--per-platform", type=int, default=20)
+    ap.add_argument("--min-year", type=int, default=None, help="最早发表年份（含）")
+    ap.add_argument("--max-year", type=int, default=None, help="最晚发表年份（含）")
     ap.add_argument("--verify", dest="verify", action="store_true", default=True,
                     help="启用 Crossref 逐条验证（默认开启）")
     ap.add_argument("--no-verify", dest="verify", action="store_false",
@@ -429,6 +555,11 @@ def main():
     ap.add_argument("--mailto", default=None,
                     help="Crossref polite 池标识邮箱（可选，验证请求附上可获更高限速）")
     ap.add_argument("--out", help="输出 JSON 路径")
+    ap.add_argument("--cache-dir", default=None, help="响应缓存目录；传 --no-cache 关闭缓存")
+    ap.add_argument("--no-cache", action="store_true", help="关闭响应缓存")
+    ap.add_argument("--openalex-budget", type=int, default=None, help="本次 OpenAlex 请求预算")
+    ap.add_argument("--crossref-budget", type=int, default=None, help="本次 Crossref 请求预算")
+    ap.add_argument("--dry-run", action="store_true", help="只检查参数与预算，不发起网络请求")
     ap.add_argument("--no-bootstrap", action="store_true", default=False,
                     help="禁用自动安装依赖（依赖由用户自行管理；等价于设 HARVEST_NO_BOOTSTRAP=1，适合离线环境）")
     ap.add_argument("--check-deps", action="store_true", default=False,
@@ -445,13 +576,39 @@ def main():
             print("[check-deps] 依赖齐全，环境就绪 ✅")
         return
 
-    # 报告模块导入阶段自动安装的依赖（如有）
-    if _BOOTSTRAP_INSTALLED and not args.no_bootstrap:
-        print(f"[bootstrap] 首次运行已自动安装缺失依赖: {', '.join(_BOOTSTRAP_INSTALLED)}")
+    if args.dry_run:
+        print(json.dumps({
+            "dry_run": True,
+            "query": args.query or "<demo>",
+            "per_platform": args.per_platform,
+            "min_year": args.min_year,
+            "max_year": args.max_year,
+            "verify": args.verify,
+            "budgets": {
+                "openalex": args.openalex_budget or int(os.environ.get("HARVEST_OPENALEX_BUDGET", "120")),
+                "crossref": args.crossref_budget or int(os.environ.get("HARVEST_CROSSREF_BUDGET", "60")),
+            },
+            "network_requests": 0,
+        }, ensure_ascii=False, indent=2))
+        return
+
+    bootstrap_installed = []
+    bootstrap_disabled = args.no_bootstrap or os.environ.get("HARVEST_NO_BOOTSTRAP") == "1"
+    if requests is None and not bootstrap_disabled:
+        _missing, bootstrap_installed = ensure_deps(auto_install=True)
+        _load_third_party()
+    if requests is None:
+        raise SystemExit("缺少依赖 requests；请运行 --check-deps 或 pip install -r scripts/requirements.txt")
+    if bootstrap_installed:
+        print(f"[bootstrap] 首次运行已自动安装缺失依赖: {', '.join(bootstrap_installed)}")
 
     if args.query:
         result = harvest(args.query, args.per_platform,
-                         verify=args.verify, mailto=args.mailto)
+                         verify=args.verify, mailto=args.mailto,
+                         min_year=args.min_year, max_year=args.max_year,
+                         cache_dir=False if args.no_cache else args.cache_dir,
+                         budgets={"openalex": args.openalex_budget,
+                                  "crossref": args.crossref_budget})
     else:
         print("[demo] 未提供 --query，使用示例检索词:\n")
         result = _demo()

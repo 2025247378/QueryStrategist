@@ -90,7 +90,8 @@ def _clean_env():
 
 def _install(pip_spec, python, mirror, target, user, env):
     cmd = [python, "-m", "pip", "install", pip_spec,
-           "-i", mirror, "--progress-bar", "on"]
+           "-i", mirror, "--progress-bar", "on",
+           "--disable-pip-version-check", "--no-input", "--timeout", "30", "--retries", "2"]
     if target:
         cmd += ["--target", target]
     elif user:
@@ -111,7 +112,7 @@ def ensure_tool(name, pip_spec=None, import_name=None, command=None,
     python = python or sys.executable
     site_dir = target or _default_site_dir()
     os.makedirs(site_dir, exist_ok=True)
-    mirrors = mirrors or DEFAULT_MIRRORS
+    mirrors = list(dict.fromkeys(mirrors or DEFAULT_MIRRORS))
 
     if _detect(import_name, command, site_dir):
         return {"status": "already_installed", "name": name,

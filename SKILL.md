@@ -1,10 +1,10 @@
 ---
 name: querystrategist
-description: "QueryStrategist 单包主 Skill（Step 0–2）| 基于 LLM 的交互式文献检索系统，通过结构化提问把模糊科研意图转化为高精度专业检索策略。面向综述、研究论著、学位论文、开题报告、基金申请、调研报告等各类文献写作场景。终点交付检索策略包（范围卡 + 6 库检索式 + 文献候选清单 + 使用说明）。本包为 Skill 集合：主 Skill（本文件）+ 12 个子模块（目录内 SKILL.sub.md）。 Pure LLM-agent skill; no external MCP server required."
+description: "QueryStrategist 单包主 Skill（Step 0–2）| 基于 LLM 的交互式文献检索系统，通过结构化提问把模糊科研意图转化为高精度专业检索策略。面向综述、研究论著、学位论文、开题报告、基金申请、调研报告等各类文献写作场景。终点交付检索策略包（范围卡 + 6 库检索式 + 文献候选清单 + 使用说明）。本包为 Skill 集合：1 个主 Skill（本文件）+ 11 个子模块（目录内 SKILL.sub.md）。 Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 4.2
+  version: 4.3.1
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -13,16 +13,18 @@ metadata:
 
 本文件是 **QueryStrategist** 的主 Skill（唯一入口），承担编排器职责：驱动 **Step 0–2 状态机**（Setup Wizard → Scope Definer → Search Strategist V1），在每个决策门（G0–G2）暂停等待人工确认，最终交付**检索策略包**（范围卡 + 6 库检索式 + 文献候选清单 + 使用说明）。
 
-本包内还包含 **12 个子模块目录**（`setup_wizard/`、`scope_definer/`、`search_strategist_v1/`、`query_crafter/`、6 个平台检索器、`literature_harvester/`）。子模块指令文件有两种形态：**SCP 单包形态**为 `SKILL.sub.md`（上架文件名），**本地独立安装形态**为 `SKILL.md`（下载解压改回后可被注册为独立 Skill）。主 Skill 按"子模块执行机制"读取并执行它们（两种文件名均支持）。
+本包内还包含 **11 个子模块目录**（`setup_wizard/`、`scope_definer/`、`search_strategist_v1/`、`query_crafter/`、6 个平台检索器、`literature_harvester/`）。子模块指令文件有两种形态：**SCP 单包形态**为 `SKILL.sub.md`（上架文件名），**本地独立安装形态**为 `SKILL.md`（下载解压改回后可被注册为独立 Skill）。主 Skill 按"子模块执行机制"读取并执行它们（两种文件名均支持）。
 
 ---
 
 ## Version
-QueryStrategist 单包版（Step 0–2）— 2026-08-09 检索策略版
+QueryStrategist 单包版（Step 0–2）— 2026-08-11 检索策略版
 
 ## Change Log
+- **V4.3.1 (2026-08-11)**: 修复 IEEE Xplore Command Search 生成器：移除无效的 `"Field":(A OR B)`，增加 25-term 自动拆分、All Metadata 宽泛式、逐项字段限定、NEAR/ONEAR 与回归测试。
+- **V4.3.0 (2026-08-10)**: 落实发布复盘 P0/P1：Search B 增加真实 API 配额守卫与 dry-run；统一 6 平台口径并补齐 Wanfang；标准化写作类型/年份配置透传；修复共享校验器 Windows 编码失败；清理演示材料中的已移除引擎描述。
 - **V4.2 (2026-08-09)**: 触发方式新增「演示模式提示」——为录屏/评审演示，入口统一用「开始文献检索」+ 全程固定话术（Setup Wizard Step 0.6），保证输出逐字一致、可复现。
-- **V4.1 (2026-08-09)**: 从"套件总入口（12 个独立子 Skill）"升级为"**单包主 Skill**"（Skills 广场上架形态）：编排器全部逻辑合并进根 SKILL.md；12 个子 Skill 指令文件改为 `SKILL.sub.md`（子模块形态）；新增"子模块执行机制"（读 `SKILL.sub.md` 内联执行，禁止幽灵动作）。
+- **V4.1 (2026-08-09)**: 从"套件总入口（11 个独立子 Skill）"升级为"**单包主 Skill**"（Skills 广场上架形态）：编排器全部逻辑合并进根 SKILL.md；11 个子 Skill 指令文件改为 `SKILL.sub.md`（子模块形态）；新增"子模块执行机制"（读 `SKILL.sub.md` 内联执行，禁止幽灵动作）。
 - **V4.0 (2026-08-09)**: 从 AI for Review（Step 0–3 综述套件）精简为 QueryStrategist（Step 0–2 检索策略生成器）。移除综述选题模块（Step 3 及全部相关资产）；终点产出改为「检索策略包（范围卡 + 6 库检索式 + 文献候选清单 + 使用说明）」；决策门收缩为 G0–G2；Setup Wizard 的"综述类型"扩展为"写作类型"并按类型调检索策略权重。（旧口径，已被 V4.1 取代）
 - **V3.0 (2026-07-31)**: 精简为 Step 0–3，移除 Step 4–8。（旧口径，仅存于变更记录）
 - **This release**: A self-contained human-in-the-loop pipeline covering Steps 0–2 — from project configuration and scope definition, through dual-channel retrieval, to search strategy pack delivery. Mandatory confirmation gates (G0–G2) keep the human in control at every decision point. The deliverable is a search strategy pack (scope card + multi-platform queries + candidate list + usage guide).
@@ -31,7 +33,7 @@ QueryStrategist 单包版（Step 0–2）— 2026-08-09 检索策略版
 
 ## 子模块执行机制（MANDATORY — 禁止幽灵动作）
 
-**本主 Skill 是唯一入口，12 个子模块（`<module>/SKILL.sub.md` 或本地形态 `<module>/SKILL.md`）不是独立 Skill，不会被平台注册**。因此任何"调用子能力"的步骤都是**执行指令**，必须真实执行，执行通道按优先级：
+**本主 Skill 是唯一入口，11 个子模块（`<module>/SKILL.sub.md` 或本地形态 `<module>/SKILL.md`）不是独立 Skill，不会被平台注册**。因此任何"调用子能力"的步骤都是**执行指令**，必须真实执行，执行通道按优先级：
 
 1. **(a) 平台 Skill 工具调用** — 若运行环境中存在已注册的同名独立 Skill（如用户本地安装了子 Skill），可先尝试 `Skill` 工具调用。
 2. **(b) 读取执行（单包默认通道）** — 读取对应子模块的指令文件（优先 `SKILL.sub.md`；不存在则读 `SKILL.md`），按其指令**真实执行**：运行其 `scripts/` 脚本、遵循其门控、产出其交付物。**读取并执行才算执行**；仅写一句"加载 X 子技能"就结束回合 = 幽灵动作，严格禁止。
