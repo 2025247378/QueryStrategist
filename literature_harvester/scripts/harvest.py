@@ -1,5 +1,5 @@
 """
-harvest.py — QueryStrategist · 文献元数据收割器（两源版 V2.1）
+    harvest.py — QueryStrategist · 文献元数据收割器（两源版 V2.4）
 =============================================================
 Search B 通道：OpenAlex 收割 + Crossref 逐条验证（去幻觉）。
 
@@ -28,7 +28,7 @@ Search B 通道：OpenAlex 收割 + Crossref 逐条验证（去幻觉）。
     python harvest.py --query "..." --no-verify            # 跳过 Crossref 验证
 
 依赖（首次运行自动安装，无需手动 pip）:
-    requests   OpenAlex / Crossref 双源必需
+    requests==2.32.5   OpenAlex / Crossref 双源必需
     离线/自管环境可设 HARVEST_NO_BOOTSTRAP=1 关闭自动安装；
     或运行 `python harvest.py --check-deps` 预检。
 """
@@ -55,7 +55,7 @@ def ensure_deps(auto_install=True):
     安装前会清除可能指向本地死代理的 *_PROXY 环境变量，避免 pip 卡在 Connection refused。
     """
     required = [
-        ("requests", "requests"),
+        ("requests", "requests==2.32.5"),
     ]
     missing = []
     for mod, pkg in required:
@@ -603,6 +603,14 @@ def main():
                     help="仅检查/安装依赖后退出（首次使用前验证环境是否就绪，不发起任何检索）")
     args = ap.parse_args()
 
+    tier_values = (args.species, args.technology, args.task)
+    tier_mode = any(value is not None for value in tier_values)
+    if tier_mode and not all(tier_values):
+        ap.error("--species、--technology、--task 必须同时提供且每组至少包含一个词")
+    trace_query = args.query or (
+        " ".join([*args.species, *args.technology, *args.task]) if tier_mode else None
+    )
+
     if args.check_deps:
         missing, installed = ensure_deps(auto_install=not args.no_bootstrap)
         if installed:
@@ -616,7 +624,12 @@ def main():
     if args.dry_run:
         print(json.dumps({
             "dry_run": True,
-            "query": args.query or "<demo>",
+            "query": trace_query or "<demo>",
+            "tier_mode": tier_mode,
+            "species": args.species,
+            "technology": args.technology,
+            "task": args.task,
+            "exclude": args.exclude,
             "per_platform": args.per_platform,
             "min_year": args.min_year,
             "max_year": args.max_year,
@@ -639,8 +652,8 @@ def main():
     if bootstrap_installed:
         print(f"[bootstrap] 首次运行已自动安装缺失依赖: {', '.join(bootstrap_installed)}")
 
-    if args.query:
-        result = harvest(args.query, args.per_platform,
+    if args.query or tier_mode:
+        result = harvest(trace_query, args.per_platform,
                          verify=args.verify, mailto=args.mailto,
                          min_year=args.min_year, max_year=args.max_year,
                          cache_dir=False if args.no_cache else args.cache_dir,

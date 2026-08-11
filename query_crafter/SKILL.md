@@ -41,7 +41,7 @@ python scripts/query_generator.py --scope scope.json --package --writing-type "�
 **`--variants` 多层级检索式（覆盖更全面）**：
 返回 JSON `{platform: [{"variant","label","query"}, ...]}`。除 IEEE 外，各平台默认生成以下 5 个层次：
 - `broad` 宽泛检索（高召回）：领域、必需技术锚点、任务三概念强制共现，各组内部 `OR`。
-- `precise` 精准检索（高精确）：三层同时 `AND`。
+- `precise` 精准检索（高精确）：调用各平台专属收紧规则；不能把所有平台简化为同一条“三层 AND”模板。具体规则以各平台子 Skill 和输出标签为准。
 - `angle_tech` 多角度·技术视角：领域层 + 技术层。
 - `angle_app` 多角度·应用视角：领域层 + 应用层。
 - `review` 综述导向：宽泛式 + 各库 review/survey 限定（WoS/Scopus/IEEE 用 review/survey 词 + 文档类型限定，Google Scholar 用 `intitle:review`/`intitle:survey`）。

@@ -101,9 +101,24 @@ def build(source, destination, force=False):
     if destination.exists() and not force:
         shutil.rmtree(stage)
         raise FileExistsError(f"目标目录已存在；如需覆盖请显式传 --force: {destination}")
+    backup = destination.with_name(f"{destination.name}.backup")
     if destination.exists():
-        shutil.rmtree(destination)
-    os.replace(stage, destination)
+        if backup.exists():
+            shutil.rmtree(stage)
+            raise FileExistsError(
+                f"检测到上次发布备份仍存在，请先人工确认并处理: {backup}"
+            )
+        os.replace(destination, backup)
+        try:
+            os.replace(stage, destination)
+        except Exception:
+            if destination.exists():
+                shutil.rmtree(destination)
+            os.replace(backup, destination)
+            raise
+        shutil.rmtree(backup)
+    else:
+        os.replace(stage, destination)
     return destination, converted
 
 

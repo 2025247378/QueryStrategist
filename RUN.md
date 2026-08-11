@@ -1,13 +1,13 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：4.4.0（以根目录 VERSION 为准）
+版本：4.5.0（以根目录 VERSION 为准）
 
 ## 快速开始
 
 1. **入口**：对任意支持 Skill 的 Agent 说「**开始文献检索**」或「**Start QueryStrategist**」。
 2. **Step 0**：Setup Wizard 配置写作类型（综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义）+ 目标语言 + 目标期刊 + 时间跨度 + 中文补充（G0 确认）。
 3. **Step 1**：Scope Definer 通过结构化提问收敛为三级关键词体系（对象层 + 必需技术锚点/支持方法 + 任务层）+ 中英文排除项 + 优先级（G1 确认）。
-4. **Step 2**：Search Strategist V1 双通道 —— Search A（Query Crafter 生成 6 平台检索式，每库查全式 A + 查准式 B）+ Search B（Literature Harvester API 收割候选清单）→ 交付**检索策略包**（最终成果）：`scope_card.md`（范围卡）+ `query_pack.md`（检索式合集）+ `candidate_list.csv/.md`（文献候选清单）+ `usage_guide.md`（使用说明）。检索策略包全部继承 Step 0–2 的上游选择与门控记录，模板见 `search_strategist_v1/assets/search_strategy_pack_template.md`（G2 确认）。
+4. **Step 2**：Search Strategist V1 双通道 —— Search A（Query Crafter 生成 6 平台检索式，每库查全式 A + 查准式 B；IEEE 另含 C/D1/D2/E 变体）+ Search B（Literature Harvester 使用对象/技术/任务三层过滤收割候选清单）→ 交付**检索策略包**（最终成果）：`scope_card.md`（范围卡）+ `query_pack.md`（检索式合集）+ `candidate_list.csv/.md`（文献候选清单）+ `usage_guide.md`（使用说明）。检索策略包全部继承 Step 0–2 的上游选择与门控记录，模板见 `search_strategist_v1/assets/search_strategy_pack_template.md`（G2 确认）。
 
 ## 目录清单
 
@@ -41,7 +41,8 @@ QueryStrategist/
 | `query_crafter` | `query_generator.py` | 多平台检索式批量生成 |
 | `_shared_tools` | `ensure_tool.py` | 开源工具检测/隔离安装（清华镜像直连） |
 | `_shared_tools` | `validate_skills.py` | 套件自校验（frontmatter 合规检查；路径自动推导，可在发布包内直接运行） |
-| `_shared_tools` | `build_ppt.py` | 参赛 PPT 生成（依赖 python-pptx） |
+| `_shared_tools` | `validate_pipeline_state.py` | 项目配置与流水线状态结构校验 |
+| `_shared_tools` | `build_ppt.py` | 参赛 PPT 生成（依赖 python-pptx；支持 `--output`） |
 | `_shared_tools` | `build_scp_package.py` | 从开发源确定性重建 SCP 单包 |
 
 ## 依赖安装
@@ -59,3 +60,4 @@ QueryStrategist/
 - **收割 ≠ 语料**：API 收割的元数据仅作候选下载清单，绝不自动进入下游当作全文语料；需用户自行下载验证。
 - **检索策略需平台验证**：检索式命中量级为预估，最终以各数据库实际检索结果为准。
 - **决策门**：G0–G2 为强制人工确认点，AI 不替人类做范围与检索策略的最终决定。
+- **项目状态校验**：对具体项目运行 `python _shared_tools/scripts/validate_pipeline_state.py --project projects/<id>`，确认 `project_meta.json`、`pipeline_state/config.json` 和结构化年份字段完整。

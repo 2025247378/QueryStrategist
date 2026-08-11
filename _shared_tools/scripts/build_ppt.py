@@ -5,6 +5,7 @@
 输出到脚本所在目录（相对路径，不硬编码私人路径）。
 """
 import os
+import argparse
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -279,9 +280,12 @@ r3.text = "感谢书生科学发现平台 · 期待你的收藏与反馈"
 style(r3, size=14, color=CREAM)
 
 # ---------- save ----------
-# 输出到脚本所在目录（相对路径，避免硬编码私人路径导致跨机器失败）
-out_dir = os.path.dirname(os.path.abspath(__file__))
-os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, "QueryStrategist_功能介绍.pptx")
+# 默认输出到脚本所在目录；发布或评审时可显式指定输出路径。
+parser = argparse.ArgumentParser(description="生成 QueryStrategist 功能介绍 PPT")
+default_out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "QueryStrategist_功能介绍.pptx")
+parser.add_argument("--output", default=default_out, help="PPTX 输出路径")
+args = parser.parse_args()
+out_path = os.path.abspath(args.output)
+os.makedirs(os.path.dirname(out_path), exist_ok=True)
 prs.save(out_path)
 print("saved:", out_path, "slides:", len(prs.slides._sldIdLst))

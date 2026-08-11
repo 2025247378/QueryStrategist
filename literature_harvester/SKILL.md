@@ -4,7 +4,7 @@ description: "文献自动收割器（两源版）| OpenAlex 无密钥收割主�
 license: MIT
 metadata:
   skill-author: PanY
-  version: 2.3
+  version: 2.4
   keywords: [literature harvesting, OpenAlex, Crossref, API, QueryStrategist]
   triggers: [文献收割, harvester, API收割, 元数据]
 ---
@@ -22,7 +22,7 @@ metadata:
 
 1. **OpenAlex**（主源，收割）：`https://api.openalex.org/works`，无需 key。
 2. **Crossref**（验证器）：`https://api.crossref.org/works/{doi}`，按 DOI 逐条回查验证，无需 key。可选 `--mailto` 以接入 polite 池（10 req/s），缺省即匿名 public 池（5 req/s），不影响功能。
-3. **requests**：唯一第三方依赖，`harvest.py` 首次运行自动安装（或 `pip install -r scripts/requirements.txt`）。
+3. **requests==2.32.5**：唯一第三方依赖，`harvest.py` 首次运行自动安装（或 `pip install -r scripts/requirements.txt`）。
 
 > **已移除（V2.0）**：Semantic Scholar（无 Key 共享池实测必 429，且召回增量可忽略）与 Scholar-KG（SCP MCP 检索增强）已从本 Skill 彻底删除，不再作为可选项。
 
@@ -78,6 +78,9 @@ This skill is part of the **QueryStrategist** workflow (V2.0). It serves as the 
 
 ## Change Log
 
+### V2.4
+Search B 三层对象/技术/任务过滤入口正式接入 CLI 调用契约（`--species`、`--technology`、`--task`、`--exclude`）；无 `--query` 时也可直接使用三层参数，不再静默落入 demo 模式。Harvester 依赖固定为 `requests==2.32.5`，新增对应回归测试。
+
 ### V2.3
 Search B 新增三层对象/技术/任务过滤入口（CLI：`--species`、`--technology`、`--task`），并将 OpenAlex 本地排除从仅标题扩展为标题 + inverted-index 摘要；新增对应的无网络单元测试。
 
@@ -103,19 +106,20 @@ You are an automated literature retrieval and verification engine. You harvest c
 The following inputs are provided by the calling Search Strategist:
 
 1. **Keyword Tiers** (from the Review Scope Confirmation Document):
-   - Tier 1 – Species/Object: keyword list
-   - Tier 2 – Technology/Method: keyword list
-   - Tier 3 – Application/Task: keyword list
+    - Tier 1 – Species/Object: `species_terms` / CLI `--species`
+    - Tier 2 – Technology/Method: `tech_terms` / CLI `--technology`
+    - Tier 3 – Application/Task: `task_terms` / CLI `--task`
 2. **Search Configuration**:
    - Time Span: start year and end year (from Project Configuration Profile)
    - Search Focus: `review-priority` (for V1, prioritize review articles) or `all-types` (for V2, all literature types)
 3. **Results Limit**: Maximum number of results to return **per sub-query** (default: 20–25).
-4. **mailto** (optional): Real email for Crossref polite pool (10 req/s). If not provided, the script uses the anonymous public pool (5 req/s) — no functional difference, only rate.
+4. **Exclusions**: `exclude_terms` / CLI `--exclude`, applied locally to title and inverted-index abstract.
+5. **mailto** (optional): Real email for Crossref polite pool (10 req/s). If not provided, the script uses the anonymous public pool (5 req/s) — no functional difference, only rate.
 
 ## Workflow (V2.0 — Script-First, Verify-Always)
 
 **职责边界**：`scripts/harvest.py` 脚本自动完成收割、DOI 提取、Crossref 逐条验证、三态分层。LLM 的职责是：
-1. 将三层关键词转化为 `harvest.py` 可执行的命令行参数
+1. 将三层关键词和排除项转化为 `harvest.py` 可执行的命令行参数
 2. 向用户展示验证统计（verified / unverified / dropped 计数与原因）
 3. **仅当脚本不可用**（如依赖缺失、网络封锁）时才降级为手动 WebFetch 模式
 
@@ -133,13 +137,18 @@ The following inputs are provided by the calling Search Strategist:
 
 ### Step 1: 构造子查询并执行 harvest.py
 
-根据三层关键词，生成 4-5 个聚焦子查询（每个一对技术词+应用词）。**规则与旧版 Step 1 相同**（领域锁定、负向排除、术语具体性、综述标识等规则全部保留）。
+根据三层关键词，生成 4-5 个聚焦子查询（每个子查询必须保留对象层，并选择一对技术词+任务词）。**规则与旧版 Step 1 相同**（领域锁定、负向排除、术语具体性、综述标识等规则全部保留）。
 
 然后为每个子查询构造 `harvest.py` 命令行：
 
 ```bash
 python scripts/harvest.py \
-  --query "YOLO \"object detection\" (cat OR dog)" \
+  --query "YOLO object detection cat freshness" \
+  --species cat dog \
+  --technology YOLO "object detection" \
+  --task freshness grading \
+  --exclude disease "water quality" \
+  --min-year 2016 --max-year 2026 \
   --per-platform 20 \
   --out harvest_q1.json
 ```
@@ -178,7 +187,7 @@ python scripts/harvest.py \
 | 1 | [harvested title] | title_mismatch | [actual title] |
 | 2 | [harvested title] | year_mismatch | [actual year] |
 
-**Top Verified Literature (first 50)**:
+**Verified Literature (all verified candidates; do not silently truncate)**:
 
 | No. | Title | First Author | Year | DOI | Verification |
 |:---:|:---|:---|:---:|:---|:---|
@@ -220,7 +229,7 @@ Based on the retrieval results, provide brief guidance:
 | **\| 为 OR（组内）** | `"cat"|"dog"|"bird"` | — |
 | **逗号为 AND（组间）** | `filter=A,filter=B` | — |
 | **`sort=relevance_score` 必须配 `search=`** | `params={"search":"...","sort":"relevance_score"}` | `params={"filter":"...","sort":"relevance_score"}` — 必 400 |
-| **⚠️ 排除词不支持 API 层（V2.0 实测确认）** | 传 `exclude_terms` 参数，脚本**本地**按标题后置过滤 | `title_and_abstract.search:-"cat"` — `-` 前缀**静默失效**（不报错也不排除）；`title_and_abstract.search:!"cat"` — `!` 前缀**直接 400**（"Search filters do not support the ! operator"） |
+| **⚠️ 排除词不支持 API 层（V2.0 实测确认）** | 传 `exclude_terms` 参数，脚本**本地**按标题和 inverted-index 摘要后置过滤 | `title_and_abstract.search:-"cat"` — `-` 前缀**静默失效**（不报错也不排除）；`title_and_abstract.search:!"cat"` — `!` 前缀**直接 400**（"Search filters do not support the ! operator"） |
 
 **强制共现模板**（推荐写法）：
 ```

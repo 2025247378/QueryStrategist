@@ -26,7 +26,7 @@ This skill is part of the **QueryStrategist** workflow (V2.0, Step 2). It receiv
  V1.21
 
 ## Change Log
-- **V1.20（2026-08-10 OA 简化）**: OA 状态改为**收割时直接附带**（用户决策）——OpenAlex 收割响应原生携带 `open_access` 字段，`harvest.py`（V2.1）通过 `select=open_access` 一次请求同时拿到 `is_oa` / `oa_status`，**零额外 API 调用、零额外错误点**。原 V1.17 的 `scripts/enrich_oa.py` 逐篇回查 OpenAlex open_access 方案**已废弃删除**（脚本、回查字段、回查容错分支全部移除），不再有独立回查环节。
+- **V1.20（2026-08-10 OA 简化）**: OA 状态改为**收割时直接附带**（用户决策）——OpenAlex 收割响应原生携带 `open_access` 字段，`harvest.py`（V2.1）通过 `select=open_access` 一次请求同时拿到 `is_oa` / `oa_status`，**零额外 API 调用、零额外错误点**。历史版本的 `scripts/enrich_oa.py` 方案已废弃删除，不再有独立回查环节。
 - **V1.19（2026-08-10 修复·防"Search B 没返回结果"复发）**: 新增 **Step 3.5「后台任务同步展示铁律（MANDATORY）」**——Search B 若为后台长任务，禁止在启动后立即结束回合；必须**等待任务完成 → 校验输出文件存在且 >0 → 在同一回合内内联展示 Part B 全量结果**（统计表 + 全部候选 + dropped 样例），否则用户会看到"没有返回结果"（本次真实事故）。新增「后台任务启动 → 等待完成 → 校验落盘 → 同步展示」四段式约束、任务未完成时的正确话术、以及`wc -c`/统计字段双校验。同时修复 Step 4 标题中残留的 `??` 乱码。
 - **V1.18**: Search B 精简为两源（与 Literature Harvester V2.0 对齐，用户决策 2026-08-10）——(1) **Step 1.5 整段删除**：Semantic Scholar Key 询问、Scholar-KG 适用性判断与门控、Crossref 访问池询问、两份申请指南全部移除，改为「零密钥零弹窗」说明；(2) Step 1.4 预告表改为固定两行（OpenAlex 收割 + Crossref 验证）；(3) Step 3 参数精简为 `verify` + 可选 `mailto`；(4) Part B 输出与 JSON Schema 增加 `verified / unverified / dropped` 三态验证分层；(5) Summary Statistics 引擎数 2。
 - **V1.17**: Part B 文献表新增 **「OA状态」列** + DOI 改为**可点击的完整 `https://doi.org/` 链接**（按用户需求）。OA 状态通过对每篇 DOI 回查 OpenAlex `open_access.is_oa` / `open_access.oa_status` 判定。新增可复用脚本 `scripts/enrich_oa.py`：生成报告前运行，自动把 `is_oa` / `oa_status` / `doi_link` 写回 metadata JSON。脚本 mailto 从参数/环境变量读取，不在发布包硬编码私人邮箱。
@@ -118,12 +118,17 @@ Receive the compiled multi-platform query package from Query Crafter.
 
 ### Step 3: Execute Search B — Literature Harvester
 **⚠️ CRITICAL (No Phantom Actions):** "invoke the Literature Harvester sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue the `Skill` tool call for `literature_harvester` in this turn — do NOT merely write "先加载 Literature Harvester 子技能…" and stop. Simultaneously with Step 2, invoke the **Literature Harvester** sub-skill with the following parameters:
-- Three keyword tiers
+- `species_terms`：对象层词列表，对应 `--species`
+- `tech_terms`：必需技术锚点词列表，对应 `--technology`
+- `task_terms`：任务/应用层词列表，对应 `--task`
+- `exclude_terms`：排除词列表，对应 `--exclude`；无排除项则传空列表
 - Literature time span as `min_year` / `max_year`
 - Writing type and derived search focus
 - Results limit: 20–25 per sub-query
 - `verify`: `True` (default) — Crossref 逐条验证开启
 - `mailto`: optional real email for Crossref polite pool (10 req/s); empty → anonymous public pool (5 req/s)
+
+**三层参数传递硬规则：** 当 Scope Document 提供三层词时，每个子查询必须调用 `harvest.py --query <trace-query> --species <对象词...> --technology <技术词...> --task <任务词...> [--exclude <排除词...>]`。不得只传普通 `--query`，否则不会启用 OpenAlex 三层强制共现过滤。
 
 Literature Harvester will:
 - Harvest candidate metadata from **OpenAlex** (the sole harvest source)

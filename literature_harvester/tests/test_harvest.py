@@ -1,4 +1,6 @@
 import importlib.util
+import io
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -59,6 +61,21 @@ class HarvestTests(unittest.TestCase):
                 "fish", verify=False,
                 species_terms=["fish"], tech_terms=["spectral imaging"],
             )
+
+    def test_cli_uses_three_tier_mode_without_query(self):
+        with patch.object(HARVEST, "requests", object()), \
+             patch.object(HARVEST, "harvest", return_value={"ok": True}) as run, \
+             patch.object(sys, "argv", [
+                 "harvest.py", "--species", "fish",
+                 "--technology", "spectral imaging", "--task", "freshness",
+             ]), \
+             patch("sys.stdout", new_callable=io.StringIO):
+            HARVEST.main()
+
+        self.assertEqual(run.call_args.args[0], "fish spectral imaging freshness")
+        self.assertEqual(run.call_args.kwargs["species_terms"], ["fish"])
+        self.assertEqual(run.call_args.kwargs["tech_terms"], ["spectral imaging"])
+        self.assertEqual(run.call_args.kwargs["task_terms"], ["freshness"])
 
 
 if __name__ == "__main__":
