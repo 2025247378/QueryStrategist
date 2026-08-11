@@ -1,8 +1,17 @@
 # 检索策略包模板（Search Strategy Pack）
 
 > 本模板定义 QueryStrategist 流水线终点（Step 2 / G2 确认后）交付的**检索策略包**标准结构。
-> 包含四份相互衔接的文件，全部落盘于 `projects/<id>/`。
+> 包含四项相互衔接的逻辑交付物，全部落盘于 `projects/<id>/`。
 > 所有字段必须标注上游出处（`【继承自 …】`），禁止凭空生成；无出处条目标记【待补】并向用户确认。
+> Markdown 是可编辑源文件，HTML 是默认阅读入口；CSV 和 Markdown 统一使用 UTF-8 BOM。
+
+## 交付格式与编码硬规则
+
+1. 输出 `scope_card.md/.html`、`query_pack.md/.html`、`candidate_list.csv/.md/.html`、`usage_guide.md/.html`。
+2. HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，不得维护第二套内容。
+3. Markdown 和 CSV 写为 UTF-8 BOM；所有文本严格 UTF-8 解码，不得出现 U+FFFD（`�`）。
+4. 最终文件使用 `[已验证]`、`[待人工核验]`、`[已剔除]`、`[注意]` 等纯文本状态，不使用 Emoji。
+5. 检索式必须放在 fenced code block 中，不得放进 Markdown 表格；渲染前后逐字一致。
 
 ---
 
@@ -31,6 +40,9 @@
 - [ ] 互锁：四份文件口径一致
 - [ ] 待补项：所有【待补】已向用户确认或说明
 - [ ] 落盘：四份文件均已写入 `projects/<id>/`
+- [ ] 编码：Markdown/CSV 为 UTF-8 BOM，所有文件不含 U+FFFD
+- [ ] 阅读：四份 Markdown 均已生成同名离线 HTML
+- [ ] 保真：`query_pack.md` 与 `query_pack.html` 中检索式逐字一致
 
 ---
 
@@ -42,10 +54,10 @@
 ## 写作类型与策略权重
 - 写作类型：【继承自 Step 0】（综述 / 研究论著 / 学位论文 / 开题报告 / 基金申请 / 调研报告 / 自定义）
 - 策略权重：【按写作类型】
-  - 综述 → 查全优先（检索式以宽式 A 为主，候选按相关度+期刊质量排）
-  - 研究论著 → 查准优先（精准式 B 为主，候选按相关度排）
-  - 开题/基金 → 兼顾新颖性（时间窗含近 2 年，标注高被引与潜在空白）
-  - 学位论文/调研报告 → 查全+查准均衡
+  - 综述：查全优先（检索式以宽式 A 为主，候选按相关度+期刊质量排）
+  - 研究论著：查准优先（精准式 B 为主，候选按相关度排）
+  - 开题/基金：兼顾新颖性（时间窗含近 2 年，标注高被引与潜在空白）
+  - 学位论文/调研报告：查全+查准均衡
 
 ## 三级关键词体系
 - Tier 1（对象）：【继承自 Step 1】
@@ -114,8 +126,8 @@
 ```
 # 文献候选清单
 
-> ⚠️ 候选清单、非最终语料。元数据可能含虚构/错位，需用户在平台核对后自行下载。
-> 来源：Search B API 收割（OpenAlex 主源）+ Crossref 按 DOI 逐条验证（title 相似度≥0.8 且年份差≤1），已验证条目去重。
+> [注意] 候选清单、非最终语料。元数据可能含虚构/错位，需用户在平台核对后自行下载。
+> 来源：Search B API 收割（OpenAlex 主源）+ Crossref 按 DOI 逐条验证（title 相似度 >= 0.8 且年份差 <= 1），已验证条目去重。
 
 ## 统计
 - 总数：【N】篇
@@ -137,12 +149,12 @@ title, authors, journal, year, doi, doi_link, oa_status, source
 # 使用说明
 
 ## 各库检索式填入位置
-- WoS：高级检索 → Topic 字段
-- Scopus：Advanced Search → TITLE-ABS-KEY
-- IEEE：Advanced Search → Command Search
+- WoS：高级检索，进入 Topic 字段
+- Scopus：Advanced Search，进入 TITLE-ABS-KEY
+- IEEE：Advanced Search，进入 Command Search
 - Google Scholar：直接粘贴（注意 256 字符上限）
-- CNKI：高级检索 → 专业检索
-- 万方：高级检索 → 跨库检索
+- CNKI：高级检索，进入专业检索
+- 万方：高级检索，进入跨库检索
 
 ## 预期命中量级
 - 查全式 A：约【N】篇（预估）

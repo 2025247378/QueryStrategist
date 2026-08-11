@@ -24,6 +24,9 @@ EXCLUDED_PATTERNS = (
     "literature_collection*.json",
     "literature_collection*.md",
     "candidate_list.*",
+    "scope_card.*",
+    "query_pack.*",
+    "usage_guide.*",
     "BUILD_MANIFEST.json",
 )
 

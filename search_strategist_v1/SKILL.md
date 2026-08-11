@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.21
+  version: 1.22
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -23,9 +23,10 @@ metadata:
 This skill is part of the **QueryStrategist** workflow (V2.0, Step 2). It receives the Review Scope Confirmation Document from Scope Definer and performs the first round of literature retrieval, focusing primarily on **review articles**, delivering the search strategy pack as the pipeline's final output.
 
 ## Version
- V1.21
+ V1.22
 
 ## Change Log
+- **V1.22（2026-08-11 交付格式优化）**: 检索策略包 Markdown/CSV 统一 UTF-8 BOM；从同名 Markdown 自动生成离线 HTML 作为默认阅读入口；正文状态标记改为纯文本，检索式代码块禁止改写；新增编码、U+FFFD、代码块与 HTML 落盘校验。
 - **V1.20（2026-08-10 OA 简化）**: OA 状态改为**收割时直接附带**（用户决策）——OpenAlex 收割响应原生携带 `open_access` 字段，`harvest.py`（V2.1）通过 `select=open_access` 一次请求同时拿到 `is_oa` / `oa_status`，**零额外 API 调用、零额外错误点**。历史版本的 `scripts/enrich_oa.py` 方案已废弃删除，不再有独立回查环节。
 - **V1.19（2026-08-10 修复·防"Search B 没返回结果"复发）**: 新增 **Step 3.5「后台任务同步展示铁律（MANDATORY）」**——Search B 若为后台长任务，禁止在启动后立即结束回合；必须**等待任务完成 → 校验输出文件存在且 >0 → 在同一回合内内联展示 Part B 全量结果**（统计表 + 全部候选 + dropped 样例），否则用户会看到"没有返回结果"（本次真实事故）。新增「后台任务启动 → 等待完成 → 校验落盘 → 同步展示」四段式约束、任务未完成时的正确话术、以及`wc -c`/统计字段双校验。同时修复 Step 4 标题中残留的 `??` 乱码。
 - **V1.18**: Search B 精简为两源（与 Literature Harvester V2.0 对齐，用户决策 2026-08-10）——(1) **Step 1.5 整段删除**：Semantic Scholar Key 询问、Scholar-KG 适用性判断与门控、Crossref 访问池询问、两份申请指南全部移除，改为「零密钥零弹窗」说明；(2) Step 1.4 预告表改为固定两行（OpenAlex 收割 + Crossref 验证）；(3) Step 3 参数精简为 `verify` + 可选 `mailto`；(4) Part B 输出与 JSON Schema 增加 `verified / unverified / dropped` 三态验证分层；(5) Summary Statistics 引擎数 2。
@@ -251,28 +252,30 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 }
 ```
 
-> ⚠️ **This JSON file is the structured metadata source for the search strategy pack (Step 5.5).** The candidate list in `candidate_list.csv/.md` is derived from `harvested_literature`; keep the JSON in sync with the Markdown report.
+> **IMPORTANT:** This JSON file is the structured metadata source for the search strategy pack (Step 5.5). The candidate list in `candidate_list.csv/.md/.html` is derived from `harvested_literature`; keep the JSON in sync with the rendered outputs.
 >
 > **路径回填规则：** `pdf_folder_path` 为主流程保留字段（默认留空）。若用户后续自行开展综述写作并整理好 PDF 文件夹，可按需回填（用 `jq` 或文件重写方式）；主流程（Step 0–2）不做此回填、也不主动询问。
 
 Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 
 ### Step 5.5: Deliver Search Strategy Pack (MANDATORY — pipeline endpoint, G2)
-**⚠️ CRITICAL (V4.0): Search Strategist V1 是 QueryStrategist 主流水线（Step 0–2）的终点。Step 5 保存文献采集报告后，立即进入本步——把本步检索结果收敛为**检索策略包四件套**（`scope_card.md` 范围卡 + `query_pack.md` 6 库检索式合集 + `candidate_list.csv/.md` 文献候选清单 + `usage_guide.md` 使用说明），然后停在 G2 决策门等用户确认。本步不加载任何下游综述选题模块（已随 V4.0 移除，不再属于本套件），不询问 PDF 文件夹路径，不替用户下载 PDF。**
+**CRITICAL (V4.0): Search Strategist V1 是 QueryStrategist 主流水线（Step 0–2）的终点。Step 5 保存文献采集报告后，立即进入本步，把结果收敛为检索策略包四项逻辑交付物（范围卡 + 6 库检索式合集 + 文献候选清单 + 使用说明）。每份 Markdown 同步生成离线 HTML，CSV/Markdown 使用 UTF-8 BOM；HTML 是默认阅读入口。然后停在 G2 决策门等用户确认。本步不加载任何下游综述选题模块，不询问 PDF 文件夹路径，不替用户下载 PDF。**
 
 **为什么有本步：** 检索策略包是主流水线的最终交付物——AI 把"检索策略"（范围卡 + 检索式 + 候选清单 + 使用说明）做对做好，下载 PDF 与写作是用户自己的事。模板见 `assets/search_strategy_pack_template.md`；所有字段标注上游出处（【继承自 Step 0/1/2】），禁止凭空生成。
 
 **执行流程：**
 1. **读取上游产物**：Step 0 `project_meta.json`（写作类型 / 目标语言 / 目标期刊 / 时间跨度）、Step 1 `scope_definition.md`（三级关键词 + 排除项 + 优先级）、Step 5 保存的 `literature_collection_report_v1.md` + `literature_collection_v1_metadata.json`。
-2. **按模板落盘四件套**（到 Step 5 用户指定的目录）：
-   - `scope_card.md` — 写作类型与策略权重、三级关键词、排除项、优先级、G0–G1 确认记录（全部标注【继承自 …】）；
-    - `query_pack.md` — Part A 的已启用平台检索式合集（最多 6 库；启用中文补充时包含 CNKI + Wanfang），每库查全式 A + 查准式 B，注明每库使用说明；
-   - `candidate_list.csv/.md` — Part B 收割的候选文献（去重 + OA 状态 + 可点击 DOI 链接），按写作类型排序；
-   - `usage_guide.md` — 使用说明：如何到各平台验证检索式、如何筛选下载 PDF、写作类型对应的策略权重。
-3. **显示 G2 门控**（用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号）：
+2. **按模板落盘四项逻辑交付物**（到 Step 5 用户指定的目录）：
+   - `scope_card.md`：写作类型与策略权重、三级关键词、排除项、优先级、G0–G1 确认记录；
+   - `query_pack.md`：Part A 的已启用平台检索式合集。每条检索式必须放入独立 fenced code block，禁止放进 Markdown 表格；
+   - `candidate_list.csv/.md`：Part B 收割的全量候选文献。表格单元格中的 `|` 必须写成 `\|`；
+   - `usage_guide.md`：平台填入位置、筛选下载方法和写作类型策略权重。
+3. **规范编码并生成 HTML（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；同时生成 `scope_card.html`、`query_pack.html`、`candidate_list.html`、`usage_guide.html`，并给 Markdown/CSV 写入 UTF-8 BOM。
+4. **写后校验（缺一不可）**：确认所有 `.md/.csv/.html` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 U+FFFD（`�`）；HTML 含 `<meta charset="utf-8">`；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致。任一校验失败均不得进入 G2。
+5. **显示 G2 门控**（用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号）：
    - question（按交互语言）: "检索策略包已交付（范围卡 + 检索式 + 候选清单 + 使用说明）。确认完成流水线，还是需要调整？"
    - options: 「确认完成」/「需要调整」
-4. **用户确认后（G2 通过）**：输出完成总结，流水线结束。
+6. **用户确认后（G2 通过）**：输出完成总结，流水线结束。
 
 > ⚠️ **收割 ≠ 语料（铁律）**：候选清单是"待下载参考"，不是已核实的全文语料。下载哪些 PDF、是否纳入，完全由用户决定——AI 不替用户自动下载，也不替用户决定纳入。
 
@@ -318,12 +321,12 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 **Harvested Literature List**（仅列 verified + unverified；dropped 单独展示典型例子）:
 | No. | Title | First Author | Year | DOI (clickable) | Verification | OA状态 |
 |:---:|:---|:---|:---:|:---|:---|:---|
-| 1 | [Full title] | [Author] | [Year] | [https://doi.org/...](https://doi.org/...) | ✅ verified | OA期刊 (gold) / 非OA期刊 (closed) / 未知 |
-| 2 | [Full title] | [Author] | [Year] | [https://doi.org/...](https://doi.org/...) | ⚠️ unverified | OA期刊 (gold) / 非OA期刊 (closed) / 未知 |
+| 1 | [Full title] | [Author] | [Year] | [https://doi.org/...](https://doi.org/...) | [已验证] verified | OA期刊 (gold) / 非OA期刊 (closed) / 未知 |
+| 2 | [Full title] | [Author] | [Year] | [https://doi.org/...](https://doi.org/...) | [待人工核验] unverified | OA期刊 (gold) / 非OA期刊 (closed) / 未知 |
 | ... | ... | ... | ... | ... | ... | ... |
 
 > **V2.0 — 验证状态渲染规则（强制）：**
-> - **verification 列**：`✅ verified`（Crossref 按 DOI 回查通过）/ `⚠️ unverified`（无 DOI 或验证瞬时失败，保留供人工参考）/ `❌ dropped`（验证不通过，不进主表，另列典型例子）。
+> - **verification 列**：`[已验证] verified`（Crossref 按 DOI 回查通过）/ `[待人工核验] unverified`（无 DOI 或验证瞬时失败，保留供人工参考）/ `[已剔除] dropped`（验证不通过，不进主表，另列典型例子）。最终文件禁止使用 Emoji 表示状态。
 > - **V1.17 — DOI 必须是可点击的完整链接**：单元格写为 `[https://doi.org/<doi>](https://doi.org/<doi>)`（即在 DOI 前加 `https://doi.org/` 前缀），不要只写裸 `10.xxxx`。
 > - **V1.20 — 「OA状态」列**：值为 `OA期刊 (<oa_status>)`、`非OA期刊 (<oa_status>)` 或 `未知`。`is_oa` 与 `oa_status` 来自收割时 OpenAlex 原生附带的 `open_access` 字段（V1.20 起不再逐篇回查）。
 > - 在 Part B 统计区新增一行验证汇总：`验证通过：V 篇 / 无 DOI 待人工：U 篇 / 验证剔除：D 篇`。

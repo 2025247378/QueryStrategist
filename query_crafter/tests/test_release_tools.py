@@ -7,24 +7,32 @@ from pathlib import Path
 
 MODULE_PATH = Path(__file__).parents[2] / "_shared_tools" / "scripts" / "build_scp_package.py"
 STATE_VALIDATOR_PATH = Path(__file__).parents[2] / "_shared_tools" / "scripts" / "validate_pipeline_state.py"
+RENDERER_PATH = Path(__file__).parents[2] / "_shared_tools" / "scripts" / "render_deliverables.py"
 SPEC = importlib.util.spec_from_file_location("build_scp_package", MODULE_PATH)
 BUILDER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BUILDER)
 STATE_SPEC = importlib.util.spec_from_file_location("validate_pipeline_state", STATE_VALIDATOR_PATH)
 STATE_VALIDATOR = importlib.util.module_from_spec(STATE_SPEC)
 STATE_SPEC.loader.exec_module(STATE_VALIDATOR)
+RENDERER_SPEC = importlib.util.spec_from_file_location("render_deliverables", RENDERER_PATH)
+RENDERER = importlib.util.module_from_spec(RENDERER_SPEC)
+RENDERER_SPEC.loader.exec_module(RENDERER)
 
 
 class ReleaseToolTests(unittest.TestCase):
     def test_ignore_excludes_runtime_and_secret_files_but_keeps_example(self):
         ignored = BUILDER._ignore(Path("."), [
             ".env", ".env.example", "harvest-demo.json", "candidate_list.csv",
+            "scope_card.html", "query_pack.md", "usage_guide.html",
             "normal.md", "private.pem",
         ])
         self.assertIn(".env", ignored)
         self.assertNotIn(".env.example", ignored)
         self.assertIn("harvest-demo.json", ignored)
         self.assertIn("candidate_list.csv", ignored)
+        self.assertIn("scope_card.html", ignored)
+        self.assertIn("query_pack.md", ignored)
+        self.assertIn("usage_guide.html", ignored)
         self.assertIn("private.pem", ignored)
         self.assertNotIn("normal.md", ignored)
 
@@ -69,6 +77,29 @@ class ReleaseToolTests(unittest.TestCase):
                 "target_language": "简体中文",
             }), encoding="utf-8")
             self.assertEqual(STATE_VALIDATOR.validate_project(project), [])
+
+    def test_deliverable_renderer_adds_bom_html_and_preserves_query_code(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            markdown = directory / "query_pack.md"
+            markdown.write_text(
+                "# 检索式\n\n⚠️ 验证状态 ≥ 1\n\n```text\nA ≥ B → C\n```\n",
+                encoding="utf-8",
+            )
+            csv_path = directory / "candidate_list.csv"
+            csv_path.write_text("title,status\n中文标题,verified\n", encoding="utf-8")
+
+            processed = RENDERER.process_directory(directory)
+
+            self.assertIn(markdown.with_suffix(".html"), processed)
+            self.assertTrue(markdown.read_bytes().startswith(b"\xef\xbb\xbf"))
+            normalized = markdown.read_text(encoding="utf-8-sig")
+            self.assertIn("[注意] 验证状态 >= 1", normalized)
+            self.assertIn("A ≥ B → C", normalized)
+            rendered = markdown.with_suffix(".html").read_text(encoding="utf-8-sig")
+            self.assertIn('<meta charset="utf-8">', rendered)
+            self.assertIn("A ≥ B → C", rendered)
+            self.assertTrue(csv_path.read_bytes().startswith(b"\xef\xbb\xbf"))
 
 
 if __name__ == "__main__":
