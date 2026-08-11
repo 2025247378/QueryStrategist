@@ -83,7 +83,22 @@ class ReleaseToolTests(unittest.TestCase):
             directory = Path(tmp)
             markdown = directory / "query_pack.md"
             markdown.write_text(
-                "# 检索式\n\n⚠️ 验证状态 ≥ 1\n\n```text\nA ≥ B → C\n```\n",
+                "# 检索式\n\n⚠️ 验证状态 ≥ 1\n\n"
+                "## Web of Science\n\n```text\nA ≥ B → C\n```\n\n"
+                "## Scopus\n\n```text\nTITLE-ABS-KEY(fish)\n```\n",
+                encoding="utf-8",
+            )
+            (directory / "scope_card.md").write_text(
+                "# 范围卡\n\n## 三级关键词\n\n- 对象：fish\n",
+                encoding="utf-8",
+            )
+            (directory / "candidate_list.md").write_text(
+                "# 候选文献\n\n| Title | Year | Verification | OA状态 |\n"
+                "|---|---|---|---|\n| Fish paper | 2025 | [已验证] verified | gold |\n",
+                encoding="utf-8",
+            )
+            (directory / "usage_guide.md").write_text(
+                "# 使用说明\n\n## WoS\n\n进入高级检索。\n",
                 encoding="utf-8",
             )
             csv_path = directory / "candidate_list.csv"
@@ -99,6 +114,17 @@ class ReleaseToolTests(unittest.TestCase):
             rendered = markdown.with_suffix(".html").read_text(encoding="utf-8-sig")
             self.assertIn('<meta charset="utf-8">', rendered)
             self.assertIn("A ≥ B → C", rendered)
+            self.assertIn('class="topbar"', rendered)
+            self.assertIn('data-page="query_pack"', rendered)
+            self.assertIn("复制检索式", rendered)
+            self.assertNotIn("<script src=", rendered)
+            self.assertNotIn("<link rel=", rendered)
+            candidate_html = (directory / "candidate_list.html").read_text(encoding="utf-8-sig")
+            self.assertIn("candidate-search", candidate_html)
+            index_html = (directory / "index.html").read_text(encoding="utf-8-sig")
+            self.assertIn("离线检索工作台", index_html)
+            self.assertIn('href="query_pack.html"', index_html)
+            self.assertTrue((directory / "index.html").read_bytes().startswith(b"\xef\xbb\xbf"))
             self.assertTrue(csv_path.read_bytes().startswith(b"\xef\xbb\xbf"))
 
 

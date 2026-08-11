@@ -7,7 +7,7 @@
 
 ## 交付格式与编码硬规则
 
-1. 输出 `scope_card.md/.html`、`query_pack.md/.html`、`candidate_list.csv/.md/.html`、`usage_guide.md/.html`。
+1. 输出默认入口 `index.html`，以及 `scope_card.md/.html`、`query_pack.md/.html`、`candidate_list.csv/.md/.html`、`usage_guide.md/.html`。
 2. HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，不得维护第二套内容。
 3. Markdown 和 CSV 写为 UTF-8 BOM；所有文本严格 UTF-8 解码，不得出现 U+FFFD（`�`）。
 4. 最终文件使用 `[已验证]`、`[待人工核验]`、`[已剔除]`、`[注意]` 等纯文本状态，不使用 Emoji。
@@ -42,6 +42,8 @@
 - [ ] 落盘：四份文件均已写入 `projects/<id>/`
 - [ ] 编码：Markdown/CSV 为 UTF-8 BOM，所有文件不含 U+FFFD
 - [ ] 阅读：四份 Markdown 均已生成同名离线 HTML
+- [ ] 入口：`index.html` 可导航到四份内容页，页面无外部资源请求
+- [ ] 交互：检索式可复制；候选清单可搜索、筛选、排序；关闭 JavaScript 后内容仍完整
 - [ ] 保真：`query_pack.md` 与 `query_pack.html` 中检索式逐字一致
 
 ---

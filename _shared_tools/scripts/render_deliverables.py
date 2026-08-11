@@ -3,9 +3,16 @@
 import argparse
 import codecs
 import html
+import importlib.util
 import re
 import sys
 from pathlib import Path
+
+
+WORKBENCH_PATH = Path(__file__).with_name("html_workbench.py")
+WORKBENCH_SPEC = importlib.util.spec_from_file_location("querystrategist_html_workbench", WORKBENCH_PATH)
+WORKBENCH = importlib.util.module_from_spec(WORKBENCH_SPEC)
+WORKBENCH_SPEC.loader.exec_module(WORKBENCH)
 
 
 DEFAULT_MARKDOWN = (
@@ -79,7 +86,7 @@ def _table_cells(line):
     )]
 
 
-def markdown_to_html(markdown_text, title):
+def _render_markdown_body(markdown_text):
     """Render the controlled Markdown subset used by QueryStrategist outputs."""
     lines = markdown_text.splitlines()
     body = []
@@ -171,28 +178,18 @@ def markdown_to_html(markdown_text, title):
             index += 1
         body.append(f"<p>{_inline(' '.join(paragraphs))}</p>")
 
-    css = """
-    :root { color-scheme: light; }
-    body { margin: 0 auto; max-width: 1120px; padding: 32px 40px 64px;
-      color: #1f2933; background: #fff; font: 16px/1.7 "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
-    h1, h2, h3 { color: #153b5b; line-height: 1.3; }
-    h1 { border-bottom: 3px solid #d06b32; padding-bottom: 12px; }
-    h2 { margin-top: 32px; border-bottom: 1px solid #d9e2e8; padding-bottom: 6px; }
-    a { color: #006b8f; }
-    code { font-family: Consolas, "Courier New", monospace; background: #f3f6f8; padding: 2px 5px; }
-    pre { overflow-x: auto; padding: 16px; background: #f3f6f8; border-left: 4px solid #2e7d8b; }
-    pre code { padding: 0; white-space: pre; }
-    blockquote { margin: 18px 0; padding: 10px 16px; border-left: 4px solid #d06b32; background: #fff8f2; }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; }
-    th, td { border: 1px solid #cbd5dc; padding: 8px 10px; text-align: left; vertical-align: top; }
-    th { background: #edf3f6; }
-    @media (max-width: 640px) { body { padding: 20px 16px 40px; font-size: 15px; } }
-    """
-    return ("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
-            f"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            f"<title>{html.escape(title)}</title><style>{css}</style></head>"
-            f"<body>{''.join(body)}</body></html>\n")
+    return "".join(body)
+
+
+def markdown_to_html(markdown_text, title, page_key=None, available_pages=None):
+    page_key = page_key or title
+    available_pages = available_pages or [page_key]
+    return WORKBENCH.shell(
+        title,
+        _render_markdown_body(markdown_text),
+        page_key,
+        available_pages,
+    )
 
 
 def _write_bom(path, text):
@@ -203,15 +200,30 @@ def _write_bom(path, text):
 def process_directory(directory, markdown_names=DEFAULT_MARKDOWN, csv_names=DEFAULT_CSV):
     directory = Path(directory).resolve()
     processed = []
+    normalized_files = {}
     for name in markdown_names:
         path = directory / name
         if not path.is_file():
             continue
         normalized = normalize_markdown(_read_utf8(path))
         _write_bom(path, normalized)
+        normalized_files[path.stem] = normalized
+        processed.append(path)
+
+    available_pages = [key for key in WORKBENCH.PAGE_META if key in normalized_files]
+    for key in available_pages:
+        path = directory / f"{key}.md"
         html_path = path.with_suffix(".html")
-        _write_bom(html_path, markdown_to_html(normalized, path.stem))
-        processed.extend((path, html_path))
+        title = WORKBENCH.PAGE_META[key][1]
+        _write_bom(html_path, markdown_to_html(
+            normalized_files[key], title, key, available_pages
+        ))
+        processed.append(html_path)
+
+    if available_pages:
+        index_path = directory / "index.html"
+        _write_bom(index_path, WORKBENCH.index_page(available_pages))
+        processed.append(index_path)
     for name in csv_names:
         path = directory / name
         if not path.is_file():

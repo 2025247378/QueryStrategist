@@ -4,7 +4,7 @@ description: "QueryStrategist 单包主 Skill（Step 0–2）| 基于 LLM 的交
 license: MIT
 metadata:
   skill-author: PanY
-  version: 4.6.0
+  version: 4.7.0
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -21,6 +21,7 @@ metadata:
 QueryStrategist 单包版（Step 0–2）— 2026-08-11 检索策略版
 
 ## Change Log
+- **V4.7.0 (2026-08-11)**: 将离线 HTML 升级为面向研究者的检索工作台：新增 `index.html` 总入口、统一导航与目录、六库检索式标签页和复制按钮、候选文献搜索/状态/OA/年份筛选及排序、打印样式和移动端布局；全部 CSS/JS 内嵌，无 CDN 依赖。
 - **V4.6.0 (2026-08-11)**: 优化最终交付可读性：Markdown/CSV 统一 UTF-8 BOM，移除正文中易乱码状态符号，为四件套 Markdown 生成内嵌样式的离线 HTML；检索式代码块保持原样并增加渲染回归测试。
 - **V4.5.0 (2026-08-11)**: 补齐 Search B 对象/技术/任务/排除参数契约；统一 IEEE A/B/C/D1/D2/E 与全量候选输出口径；新增项目状态校验、SCP 原子覆盖保护、固定 Harvester 依赖和平台验收清单。
 - **V4.4.0 (2026-08-11)**: 落实发布复盘优化：Search B 精准式改为平台专属收紧规则；Search A 缺失必需关键词层时快速失败；Harvester 接入 OpenAlex 三层过滤并支持标题/摘要排除；SCP 构建增加敏感文件过滤、覆盖保护和构建 manifest；校验器增加 VERSION/README/RUN 一致性检查与回归测试。
@@ -80,6 +81,7 @@ G2 确认后，自动产出四份相互衔接的文件（模板见 `search_strat
 4. **`usage_guide.md/.html`** — 使用说明（检索式填入位置 + 命中量级预估 + 调宽/调窄方法 + 按写作类型建议）。
 
 Markdown 和 CSV 统一写为 UTF-8 BOM；HTML 为默认阅读入口、可离线打开。HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，禁止维护第二套内容。
+最终交付目录必须生成 `index.html`，用户从该文件进入四项逻辑交付物；各页面在 JavaScript 不可用时仍须完整展示原始内容。
 
 所有字段继承 Step 0–2 上游选择（`【继承自 …】` 标注），禁止凭空生成。
 

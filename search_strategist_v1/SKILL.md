@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.22
+  version: 1.23
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -23,9 +23,10 @@ metadata:
 This skill is part of the **QueryStrategist** workflow (V2.0, Step 2). It receives the Review Scope Confirmation Document from Scope Definer and performs the first round of literature retrieval, focusing primarily on **review articles**, delivering the search strategy pack as the pipeline's final output.
 
 ## Version
- V1.22
+ V1.23
 
 ## Change Log
+- **V1.23（2026-08-11 HTML 工作台）**: 新增 `index.html` 默认入口、统一导航和本页目录；检索式页增加数据库标签页与复制按钮；候选清单增加搜索、验证状态/OA/年份筛选和表头排序；增加打印和移动端样式，全部资源内嵌且离线可用。
 - **V1.22（2026-08-11 交付格式优化）**: 检索策略包 Markdown/CSV 统一 UTF-8 BOM；从同名 Markdown 自动生成离线 HTML 作为默认阅读入口；正文状态标记改为纯文本，检索式代码块禁止改写；新增编码、U+FFFD、代码块与 HTML 落盘校验。
 - **V1.20（2026-08-10 OA 简化）**: OA 状态改为**收割时直接附带**（用户决策）——OpenAlex 收割响应原生携带 `open_access` 字段，`harvest.py`（V2.1）通过 `select=open_access` 一次请求同时拿到 `is_oa` / `oa_status`，**零额外 API 调用、零额外错误点**。历史版本的 `scripts/enrich_oa.py` 方案已废弃删除，不再有独立回查环节。
 - **V1.19（2026-08-10 修复·防"Search B 没返回结果"复发）**: 新增 **Step 3.5「后台任务同步展示铁律（MANDATORY）」**——Search B 若为后台长任务，禁止在启动后立即结束回合；必须**等待任务完成 → 校验输出文件存在且 >0 → 在同一回合内内联展示 Part B 全量结果**（统计表 + 全部候选 + dropped 样例），否则用户会看到"没有返回结果"（本次真实事故）。新增「后台任务启动 → 等待完成 → 校验落盘 → 同步展示」四段式约束、任务未完成时的正确话术、以及`wc -c`/统计字段双校验。同时修复 Step 4 标题中残留的 `??` 乱码。
@@ -270,8 +271,8 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
    - `query_pack.md`：Part A 的已启用平台检索式合集。每条检索式必须放入独立 fenced code block，禁止放进 Markdown 表格；
    - `candidate_list.csv/.md`：Part B 收割的全量候选文献。表格单元格中的 `|` 必须写成 `\|`；
    - `usage_guide.md`：平台填入位置、筛选下载方法和写作类型策略权重。
-3. **规范编码并生成 HTML（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；同时生成 `scope_card.html`、`query_pack.html`、`candidate_list.html`、`usage_guide.html`，并给 Markdown/CSV 写入 UTF-8 BOM。
-4. **写后校验（缺一不可）**：确认所有 `.md/.csv/.html` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 U+FFFD（`�`）；HTML 含 `<meta charset="utf-8">`；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致。任一校验失败均不得进入 G2。
+3. **规范编码并生成 HTML 工作台（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；同时生成默认入口 `index.html`、四份内容页，并给 Markdown/CSV 写入 UTF-8 BOM。检索式页提供平台标签页与复制按钮，候选清单页提供本地搜索、筛选和排序。
+4. **写后校验（缺一不可）**：确认 `index.html` 及所有 `.md/.csv/.html` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 U+FFFD（`�`）；HTML 含 `<meta charset="utf-8">`；无外部脚本/样式依赖；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致。任一校验失败均不得进入 G2。
 5. **显示 G2 门控**（用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号）：
    - question（按交互语言）: "检索策略包已交付（范围卡 + 检索式 + 候选清单 + 使用说明）。确认完成流水线，还是需要调整？"
    - options: 「确认完成」/「需要调整」
