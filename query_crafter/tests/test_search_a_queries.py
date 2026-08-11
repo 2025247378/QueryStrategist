@@ -114,6 +114,27 @@ class SearchARulesTests(unittest.TestCase):
         )
         self.assertGreater(scopus_review.rfind(" AND NOT "), scopus_review.rfind("review"))
 
+    def test_precise_variants_are_materially_narrower(self):
+        variants = QUERY_GENERATOR.generate_variants(self.scope)
+        for platform in ("wos", "scopus", "cnki", "wanfang"):
+            broad = next(row["query"] for row in variants[platform]
+                         if row["variant"] == "broad")
+            precise = next(row["query"] for row in variants[platform]
+                           if row["variant"] == "precise")
+            self.assertNotEqual(broad, precise, platform)
+        self.assertIn("TI=", next(row["query"] for row in variants["wos"]
+                                  if row["variant"] == "precise"))
+        self.assertIn(" W/5 ", next(row["query"] for row in variants["scopus"]
+                                    if row["variant"] == "precise"))
+        self.assertIn("TI=", next(row["query"] for row in variants["cnki"]
+                                  if row["variant"] == "precise"))
+
+    def test_search_a_rejects_missing_required_tier(self):
+        incomplete = bilingual_scope()
+        incomplete["keyword_tiers"].pop("tier3_application_task")
+        with self.assertRaisesRegex(ValueError, "tier3 task"):
+            QUERY_GENERATOR.generate(incomplete)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,9 @@
 """从 QueryStrategist 开发包构建 SCP 单包发布目录。"""
 
 import argparse
+import fnmatch
+import hashlib
+import json
 import os
 import shutil
 from pathlib import Path
@@ -14,13 +17,29 @@ EXCLUDED_NAMES = {
     ".cache",
     "projects",
 }
+EXCLUDED_PATTERNS = (
+    ".env",
+    ".env.*",
+    "harvest*.json",
+    "literature_collection*.json",
+    "literature_collection*.md",
+    "candidate_list.*",
+    "BUILD_MANIFEST.json",
+)
 
 
 def _ignore(_directory, names):
     return {
         name
         for name in names
-        if name in EXCLUDED_NAMES or name.endswith((".pyc", ".pyo", ".log", ".token", ".key", ".pem"))
+        if (
+            name != ".env.example"
+            and (
+                name in EXCLUDED_NAMES
+                or any(fnmatch.fnmatchcase(name, pattern) for pattern in EXCLUDED_PATTERNS)
+                or name.endswith((".pyc", ".pyo", ".log", ".token", ".key", ".pem"))
+            )
+        )
     }
 
 
@@ -48,11 +67,26 @@ def _convert_subskills(stage):
     return converted
 
 
-def build(source, destination):
+def _write_manifest(stage):
+    files = []
+    for path in sorted(stage.rglob("*")):
+        if not path.is_file() or path.name == "BUILD_MANIFEST.json":
+            continue
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        files.append({"path": path.relative_to(stage).as_posix(), "sha256": digest})
+    version_path = stage / "VERSION"
+    version = version_path.read_text(encoding="utf-8").strip() if version_path.is_file() else None
+    (stage / "BUILD_MANIFEST.json").write_text(
+        json.dumps({"version": version, "files": files}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def build(source, destination, force=False):
     source, destination = _validate_paths(Path(source), Path(destination))
     stage = destination.with_name(f"{destination.name}.staging")
     if stage.exists():
-        shutil.rmtree(stage)
+        raise FileExistsError(f"构建暂存目录已存在，请先人工处理: {stage}")
     shutil.copytree(source, stage, ignore=_ignore)
 
     converted = _convert_subskills(stage)
@@ -62,7 +96,11 @@ def build(source, destination):
     if not (stage / "SKILL.md").is_file():
         shutil.rmtree(stage)
         raise RuntimeError("staging 缺少根 SKILL.md")
+    _write_manifest(stage)
 
+    if destination.exists() and not force:
+        shutil.rmtree(stage)
+        raise FileExistsError(f"目标目录已存在；如需覆盖请显式传 --force: {destination}")
     if destination.exists():
         shutil.rmtree(destination)
     os.replace(stage, destination)
@@ -74,8 +112,10 @@ def main():
     default_source = Path(__file__).resolve().parents[2]
     parser.add_argument("--source", default=str(default_source))
     parser.add_argument("--destination", required=True)
+    parser.add_argument("--force", action="store_true",
+                        help="显式允许覆盖已有 _SCP 目标目录")
     args = parser.parse_args()
-    destination, converted = build(args.source, args.destination)
+    destination, converted = build(args.source, args.destination, force=args.force)
     print(f"built: {destination}")
     print(f"converted_subskills: {converted}")
 

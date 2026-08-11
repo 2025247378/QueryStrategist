@@ -125,6 +125,26 @@ if os.path.isfile(root_sk):
         if not rtrg: warns.append("[根SKILL.md] metadata 缺 triggers")
         ok += 1
 
+# 发布包版本一致性：避免 VERSION、根 Skill 和运行文档各自漂移。
+version_values = {}
+version_file = os.path.join(ROOT, "VERSION")
+if os.path.isfile(version_file):
+    version_values["VERSION"] = open(version_file, encoding="utf-8").read().strip()
+if os.path.isfile(root_sk):
+    root_version = re.search(r"^\s+version\s*:\s*([^\r\n]+)$", txt, re.M)
+    if root_version:
+        version_values["SKILL.md"] = root_version.group(1).strip().strip("\"'")
+for doc in ("README.md", "RUN.md"):
+    path = os.path.join(ROOT, doc)
+    if not os.path.isfile(path):
+        continue
+    content = open(path, encoding="utf-8").read()
+    doc_version = re.search(r"版本[：:]\s*([0-9]+(?:\.[0-9]+)+)", content)
+    if doc_version:
+        version_values[doc] = doc_version.group(1)
+if version_values and len(set(version_values.values())) > 1:
+    errors.append("发布版本不一致: " + ", ".join(f"{k}={v}" for k, v in version_values.items()))
+
 print(f"共扫描 SKILL.md: {ok} 个 (扫描根: {ROOT})")
 print(f"错误(必须修): {len(errors)}")
 for e in errors: print("  [ERROR]", e)

@@ -2,7 +2,7 @@
 
 > **定位**：基于 LLM 的交互式文献检索系统，通过结构化提问把模糊科研意图转化为高精度专业检索策略。面向综述、研究论著、学位论文、开题报告、基金申请、调研报告等各类文献写作场景。
 > **核心价值**：一句话模糊意图 → 6 大数据库精准检索式 + API 收割的文献候选清单，即拿即用。不是帮你搜，是帮你把「搜的策略」做对。
-> **版本**：4.3.2（2026-08-11）
+> **版本**：4.4.0（2026-08-11）
 
 ---
 
@@ -49,7 +49,7 @@
 流程终点（G2 确认后）产出**检索策略包**，全部落盘于 `projects/<id>/`，标准模板见 `search_strategist_v1/assets/search_strategy_pack_template.md`：
 
 - **`scope_card.md` — 范围界定卡**：三级关键词体系（Tier1 对象 / Tier2 必需技术锚点与支持方法 / Tier3 任务）+ 中英文排除项 + 写作类型 + 策略权重（查全/查准/新颖性）。
-- **`query_pack.md` — 多平台检索式合集**：6 库高级检索式，每库给「查全式 A + 查准式 B」双版本，标注语法要点与可调参数。
+- **`query_pack.md` — 多平台检索式合集**：6 库高级检索式，每库给「查全式 A + 平台专属查准式 B」双版本；B 通过标题/邻近/精确匹配等平台规则收紧，标注语法要点与可调参数。
 - **`candidate_list.csv` / `.md` — 文献候选清单**：API 收割去重元数据（标题/作者/期刊/年份/DOI）+ OA 状态 + 可点击 DOI 链接 + 来源标注；顶部声明「候选清单、非最终语料，需用户在平台验证」。
 - **`usage_guide.md` — 使用说明**：每个检索式填入哪个平台的哪个输入框、预期命中量级、如何调宽/调窄、按写作类型的检索建议。
 
@@ -86,7 +86,7 @@ QueryStrategist/
 └── _shared_tools/                           # 共享工具（ensure_tool.py / validate_skills.py / build_ppt.py）
 ```
 
-> 每个子模块目录均含 `SKILL.md`（本地安装形态，可直接注册为独立 Skill）及所需资源。SCP 发布包由 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录>` 确定性生成，不再手工同步副本。
+> 每个子模块目录均含 `SKILL.md`（本地安装形态，可直接注册为独立 Skill）及所需资源。SCP 发布包由 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录> --force` 显式覆盖生成；构建结果包含 `BUILD_MANIFEST.json`，不再手工同步副本。
 
 ---
 

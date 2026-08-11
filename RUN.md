@@ -1,6 +1,6 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：4.3.2（以根目录 VERSION 为准）
+版本：4.4.0（以根目录 VERSION 为准）
 
 ## 快速开始
 
@@ -31,7 +31,7 @@ QueryStrategist/
 └── _shared_tools/               # 共享工具安装器
 ```
 
-> 开发仓库为本地安装形态；运行 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录>` 可重建 SCP 单包形态。发布目录只保留一个根包，不再保留外层旧模块副本。
+> 开发仓库为本地安装形态；运行 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录> --force` 可显式覆盖重建 SCP 单包形态。发布目录只保留一个根包，并生成 `BUILD_MANIFEST.json`。
 
 ## 关键脚本（Skill 内 `scripts/`）
 

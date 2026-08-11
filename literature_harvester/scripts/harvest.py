@@ -185,6 +185,19 @@ def _write_cache(path, payload):
     os.replace(temp, path)
 
 
+def _abstract_text(work):
+    """Reconstruct OpenAlex's inverted-index abstract for local filtering."""
+    inverted = work.get("abstract_inverted_index") or {}
+    positions = [position for indexes in inverted.values() for position in indexes]
+    if not positions:
+        return ""
+    words = [""] * (max(positions) + 1)
+    for word, indexes in inverted.items():
+        for position in indexes:
+            words[position] = word
+    return " ".join(words)
+
+
 def _get(url, params, headers=None, timeout=20, max_retries=4, user_agent=None):
     """带预算、缓存、429 熔断与有上限退避的 JSON GET。"""
     if requests is None:
@@ -325,16 +338,18 @@ def harvest_openalex_filtered(species_terms, tech_terms, feed_terms,
     params = {
         "filter": filt,
         "per_page": per_platform,
-        "select": "title,display_name,authorships,publication_year,doi,cited_by_count,id,primary_location,open_access",
+        "select": "title,display_name,authorships,publication_year,doi,cited_by_count,id,primary_location,open_access,abstract_inverted_index",
     }
     data = _get("https://api.openalex.org/works", params)
     out = []
     for w in data.get("results", []):
         # 排除词本地后置过滤：OpenAlex 文本搜索过滤器不支持 API 层排除（- 静默失效 / ! 400）。
-        # 仅按 title 判定（abstract 不在 select 中，本地无摘要可查）。
         if exclude_terms:
-            title_lower = str(w.get("title") or w.get("display_name") or "").lower()
-            if any(term.lower() in title_lower for term in exclude_terms):
+            searchable = " ".join((
+                str(w.get("title") or w.get("display_name") or ""),
+                _abstract_text(w),
+            )).casefold()
+            if any(str(term).casefold() in searchable for term in exclude_terms):
                 continue
         authors = [a.get("author", {}).get("display_name", "") for a in w.get("authorships", [])][:8]
         oa = w.get("open_access") or {}
@@ -482,7 +497,9 @@ def verify_openalex_results(papers, mailto=None, skip_verify=False):
 
 
 def harvest(query, per_platform=20, verify=True, mailto=None,
-            min_year=None, max_year=None, cache_dir=None, budgets=None):
+            min_year=None, max_year=None, cache_dir=None, budgets=None,
+            species_terms=None, tech_terms=None, task_terms=None,
+            exclude_terms=None):
     """OpenAlex 收割 + Crossref 逐条验证（Search B 精简两源版）。
 
     Args:
@@ -501,6 +518,9 @@ def harvest(query, per_platform=20, verify=True, mailto=None,
           "statistics": {...}      # 各状态计数
         }
     """
+    filtered_terms = (species_terms, tech_terms, task_terms)
+    if any(terms is not None for terms in filtered_terms) and not all(filtered_terms):
+        raise ValueError("三层过滤必须同时提供 species_terms、tech_terms、task_terms")
     global _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR
     previous_budget, previous_cache = _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR
     _ACTIVE_BUDGET = RequestBudget(budgets)
@@ -508,7 +528,16 @@ def harvest(query, per_platform=20, verify=True, mailto=None,
         "HARVEST_CACHE_DIR", os.path.join(os.path.expanduser("~"), ".cache", "querystrategist")))
     result = {"query": query, "openalex": [], "verified": [], "unverified": [], "dropped": [], "errors": []}
     try:
-        papers = harvest_openalex(query, per_platform, min_year=min_year, max_year=max_year)
+        if any(terms is not None for terms in filtered_terms):
+            papers = harvest_openalex_filtered(
+                species_terms, tech_terms, task_terms,
+                per_platform=per_platform,
+                min_year=min_year if min_year is not None else 1900,
+                max_year=max_year,
+                exclude_terms=exclude_terms,
+            )
+        else:
+            papers = harvest_openalex(query, per_platform, min_year=min_year, max_year=max_year)
         result["openalex"] = papers
         kept, dropped = verify_openalex_results(papers, mailto=mailto, skip_verify=not verify)
         result["dropped"] = dropped
@@ -545,6 +574,14 @@ def _demo():
 def main():
     ap = argparse.ArgumentParser(description="QueryStrategist 文献收割器（OpenAlex + Crossref 验证）")
     ap.add_argument("--query", help="检索词")
+    ap.add_argument("--species", nargs="*", default=None,
+                    help="对象层词；与 --technology/--task 一起启用三层过滤")
+    ap.add_argument("--technology", nargs="*", default=None,
+                    help="必需技术锚点词；与 --species/--task 一起启用三层过滤")
+    ap.add_argument("--task", nargs="*", default=None,
+                    help="任务层词；与 --species/--technology 一起启用三层过滤")
+    ap.add_argument("--exclude", nargs="*", default=None,
+                    help="三层过滤模式下在标题和摘要中本地排除的词")
     ap.add_argument("--per-platform", type=int, default=20)
     ap.add_argument("--min-year", type=int, default=None, help="最早发表年份（含）")
     ap.add_argument("--max-year", type=int, default=None, help="最晚发表年份（含）")
@@ -608,7 +645,11 @@ def main():
                          min_year=args.min_year, max_year=args.max_year,
                          cache_dir=False if args.no_cache else args.cache_dir,
                          budgets={"openalex": args.openalex_budget,
-                                  "crossref": args.crossref_budget})
+                                  "crossref": args.crossref_budget},
+                         species_terms=args.species,
+                         tech_terms=args.technology,
+                         task_terms=args.task,
+                         exclude_terms=args.exclude)
     else:
         print("[demo] 未提供 --query，使用示例检索词:\n")
         result = _demo()

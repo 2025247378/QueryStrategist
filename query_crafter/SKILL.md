@@ -4,7 +4,7 @@ description: "检索式构建总控 | 自动调用全部6个平台子skill（WoS
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.6
+  version: 1.7
   keywords: [search query, database, orchestration, QueryStrategist]
   triggers: [检索式, query crafter, 检索式总控, 多平台检索]
 ---
@@ -36,7 +36,7 @@ python scripts/query_generator.py --scope scope.json --package --writing-type "�
 
 **检索式宽窄口径（Search A 默认宽泛）**：
 - **`broad=True`（默认，对应 Search A）**：结构为 `领域层(Tier1) AND 必需技术锚点(Tier2 Anchor) AND 应用层(Tier3)`。三类概念必须同时命中，同层同义词用 `OR` 扩展；高召回来自同义词覆盖和宽字段，而不是把不同概念层互相 OR。若 Scope 提供 `tier2_required_anchor`，Search A 使用该组作为必需技术；`tier2_supporting_method` 进入补充方法视角。
-- **`broad=False`（精准变体）**：三层全 `AND`，用于用户下载后的二次精筛参考，不替代人工检索式 A。
+- **`broad=False`（精准变体）**：使用各平台专属收紧规则（例如 WoS 标题 + `NEAR/10`、Scopus 标题 + `W/5`、CNKI 题名/主题字段、万方精确匹配），不替代人工检索式 A。
 
 **`--variants` 多层级检索式（覆盖更全面）**：
 返回 JSON `{platform: [{"variant","label","query"}, ...]}`。除 IEEE 外，各平台默认生成以下 5 个层次：
@@ -58,9 +58,10 @@ python scripts/query_generator.py --scope scope.json --package --writing-type "�
 This skill is part of the **QueryStrategist** workflow (V2.0). It serves as the central orchestration module for generating platform-specific search queries across all major academic databases. It is called by **Search Strategist V1** (Step 2) as part of its Search A pathway.
 
 ## Version
- V1.6
+ V1.7
 
 ### Change Log
+- **V1.7 (2026-08-11)**: 精准变体不再复用 Search A 原式：WoS 使用标题对象与 `NEAR/10`，Scopus 使用标题对象与 `W/5`，CNKI 使用题名/主题字段组合，万方启用精确匹配；Search A 缺失对象、技术锚点或任务层时快速失败。
 - **V1.6 (2026-08-11)**: 六库 Search A 统一为三概念强制共现，新增必需技术锚点与中英文双词表；Google Scholar 改为完整互补查询列表；WoS 单词保留词形还原；万方对齐当前官方专业检索框。
 - **V1.5 (2026-08-11)**: 修正 IEEE 25-term clause 口径与默认漏词；Query A 完整保留同义词，单词保留词干扩展，多词短语精确匹配；增加 10-wildcard/最小前缀校验；Query D 改为技术层与任务层邻近共现。
 - **V1.4 (2026-08-11)**: 修复 IEEE Command Search 生成器：禁止字段名后直接嵌套 OR 括号，宽泛式恢复 All Metadata，增加 25-term 自动拆分、会议条件式、NEAR/ONEAR 与回归测试。

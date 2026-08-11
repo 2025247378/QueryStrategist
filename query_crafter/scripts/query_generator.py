@@ -152,6 +152,14 @@ def _search_tiers(tiers):
     return t1, t2, t3
 
 
+def _validate_required_tiers(tiers, context="scope"):
+    """Fail fast when Search A cannot enforce its three required concepts."""
+    labels = ("tier1 object", "tier2 required technology anchor", "tier3 task")
+    for label, terms in zip(labels, _search_tiers(tiers)):
+        if not any(str(term).strip() for term in (terms or [])):
+            raise ValueError(f"{context} is missing required {label} terms")
+
+
 def _broad_and(groups, wrap):
     """Search A: require every supplied concept tier; broaden within tiers."""
     gs = [g for g in groups if g]
@@ -170,7 +178,14 @@ def build_wos(tiers, exclusions, warnings=None, broad=True):
     """
     groups = _tier_groups(tiers)
     w = lambda g: f"TS=({g})"
-    core = _broad_and(groups, w) if broad else " AND ".join(w(g) for g in groups)
+    if broad:
+        core = _broad_and(groups, w)
+    else:
+        t1, t2, t3 = _search_tiers(tiers)
+        core = (
+            f"TI=({_join_terms(t1)}) AND "
+            f"TS=(({_join_terms(t2)}) NEAR/10 ({_join_terms(t3)}))"
+        )
     ex_terms = _guard_exclusions(exclusions, warnings, "wos", allow_cjk=False)
     ex_clause = f" NOT TS=({_fmt_excl_terms(ex_terms)})" if ex_terms else ""
     return core + ex_clause
@@ -179,7 +194,14 @@ def build_wos(tiers, exclusions, warnings=None, broad=True):
 def build_scopus(tiers, exclusions, warnings=None, broad=True):
     groups = _tier_groups(tiers)
     w = lambda g: f"TITLE-ABS-KEY({g})"
-    core = _broad_and(groups, w) if broad else " AND ".join(w(g) for g in groups)
+    if broad:
+        core = _broad_and(groups, w)
+    else:
+        t1, t2, t3 = _search_tiers(tiers)
+        core = (
+            f"TITLE({_join_terms(t1)}) AND "
+            f"TITLE-ABS-KEY(({_join_terms(t2)}) W/5 ({_join_terms(t3)}))"
+        )
     ex_terms = _guard_exclusions(exclusions, warnings, "scopus", allow_cjk=False)
     if ex_terms:
         core += " AND NOT " + w(_fmt_excl_terms(ex_terms))
@@ -506,13 +528,18 @@ def build_google_scholar(tiers, exclusions, warnings=None, broad=True):
 
 
 def build_cnki(tiers, exclusions, warnings=None, broad=True):
-    def su_or(terms):
-        joined = " OR ".join(f"SU='{t}'" for t in terms)
+    def field_or(field, terms):
+        joined = " OR ".join(f"{field}='{str(t).strip()}'" for t in terms)
         return f"({joined})" if len(terms) > 1 else joined
     t1, t2, t3 = _search_tiers(tiers)
-    g1 = su_or(t1)
-    g2 = su_or(t2)
-    g3 = su_or(t3)
+    if broad:
+        g1 = field_or("SU", t1)
+        g2 = field_or("SU", t2)
+        g3 = field_or("SU", t3)
+    else:
+        g1 = field_or("TI", t1)
+        g2 = field_or("SU", t2)
+        g3 = field_or("TI", t3)
     groups = [g for g in (g1, g2, g3) if g]
     core = " AND ".join(groups)
     ex_terms = [f"SU='{str(e).strip()}'" for e in exclusions if str(e).strip()]
@@ -522,19 +549,19 @@ def build_cnki(tiers, exclusions, warnings=None, broad=True):
 
 
 def build_wanfang(tiers, exclusions, warnings=None, broad=True):
-    def wf_term(term):
+    def wf_term(term, precise=False):
         value = str(term).strip()
-        return f'"{value}"' if re.search(r"\s|[()]", value) else value
+        return f'"{value}"' if precise or re.search(r"\s|[()]", value) else value
 
-    def wf_or(terms):
-        values = [wf_term(t) for t in terms if str(t).strip()]
+    def wf_or(terms, precise=False):
+        values = [wf_term(t, precise) for t in terms if str(t).strip()]
         joined = " OR ".join(values)
         return f"({joined})" if len(values) > 1 else joined
 
     t1, t2, t3 = _search_tiers(tiers)
-    g1 = wf_or(t1)
-    g2 = wf_or(t2)
-    g3 = wf_or(t3)
+    g1 = wf_or(t1, precise=not broad)
+    g2 = wf_or(t2, precise=not broad)
+    g3 = wf_or(t3, precise=not broad)
     groups = [g for g in (g1, g2, g3) if g]
     core = " AND ".join(groups)
     ex_terms = [wf_term(e) for e in exclusions if str(e).strip()]
@@ -579,6 +606,9 @@ def generate(scope, platforms=None, warnings=None):
     exclusions = scope.get("explicit_exclusions", [])
     zh_tiers = scope.get("keyword_tiers_zh") or tiers
     zh_exclusions = scope.get("explicit_exclusions_zh") or exclusions
+    _validate_required_tiers(tiers)
+    if scope.get("keyword_tiers_zh"):
+        _validate_required_tiers(zh_tiers, "keyword_tiers_zh")
     if platforms is None:
         platforms = list(BUILDERS.keys())
     out = {}
@@ -650,6 +680,9 @@ def generate_variants(scope, platforms=None, warnings=None):
     exclusions = scope.get("explicit_exclusions", [])
     zh_tiers = scope.get("keyword_tiers_zh") or tiers
     zh_exclusions = scope.get("explicit_exclusions_zh") or exclusions
+    _validate_required_tiers(tiers)
+    if scope.get("keyword_tiers_zh"):
+        _validate_required_tiers(zh_tiers, "keyword_tiers_zh")
     if platforms is None:
         platforms = list(BUILDERS.keys())
     out = {}
