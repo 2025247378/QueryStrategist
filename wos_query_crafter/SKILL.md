@@ -4,7 +4,7 @@ description: "WoS检索式构建器 | 将三级关键词转化为 Web of Science
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.4
+  version: v1.0.0
   keywords: [Web of Science, search query, bibliographic, QueryStrategist]
   triggers: [WoS, web of science, 检索式]
 ---
@@ -21,13 +21,6 @@ metadata:
 
 ## 所属系统
 **QueryStrategist** 工作流 — Search Strategist 的子模块（Search A）
-
-## 版本
-V1.4
-
-## 变更记录
-- **V1.4 (2026-08-12)**：改为 A0/A1/B 分层：A0 仅 `TS=(对象) AND TS=(必需技术)` 且不加排除；A1 再加入任务与排除；B 使用标题字段和 `NEAR/10` 收紧。
-- **V1.3 (2026-08-11)**：按 Web of Science 当前官方帮助中心修正 Search A 为三概念强制共现；单词默认不加引号以保留 lemmatization/stemming，多词固定短语才加引号；纠正 `SAME` 仅用于 Address 检索，Topic 精准共现改用 `NEAR/x`。
 
 ## 目标
 将用户的研究方向（来自 Scope Definer 的三层关键词）转化为符合 Web of Science 高级检索语法的精准检索式，确保文献检索的准确性、可复现性和高相关性。

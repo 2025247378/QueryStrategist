@@ -4,7 +4,7 @@ description: "检索式构建总控 | 自动调用全部6个平台子skill（WoS
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.9
+  version: v1.0.0
   keywords: [search query, database, orchestration, QueryStrategist]
   triggers: [检索式, query crafter, 检索式总控, 多平台检索]
 ---
@@ -55,18 +55,7 @@ python scripts/query_generator.py --scope scope.json --package --writing-type "�
 # Query Crafter
 
 ## QueryStrategist System
-This skill is part of the **QueryStrategist** workflow (V2.0). It serves as the central orchestration module for generating platform-specific search queries across all major academic databases. It is called by **Search Strategist V1** (Step 2) as part of its Search A pathway.
-
-## Version
- V1.9
-
-### Change Log
-- **V1.9 (2026-08-12)**: 六库统一采用 A0/A1/B 分层语义：A0 仅对象+必需技术且不加排除，A1 恢复对象+技术+任务并应用排除，B 使用平台专属字段/邻近规则；Google Scholar 取消三层笛卡尔积，A0/A1 各最多生成 6 条互补短查询。
-- **V1.8 (2026-08-12)**: 修复真实 IEEE 零命中案例：IEEE A0 改为对象+技术召回基线，A1 保留三层主题式，B 改为题名对象+技术；对象复合短语自动提取重复中心词作为召回锚点，并支持 `tier1_recall_anchor`。其余五库规则不变。
-- **V1.7 (2026-08-11)**: 精准变体不再复用 Search A 原式：WoS 使用标题对象与 `NEAR/10`，Scopus 使用标题对象与 `W/5`，CNKI 使用题名/主题字段组合，万方启用精确匹配；Search A 缺失对象、技术锚点或任务层时快速失败。
-- **V1.6 (2026-08-11)**: 六库 Search A 统一为三概念强制共现，新增必需技术锚点与中英文双词表；Google Scholar 改为完整互补查询列表；WoS 单词保留词形还原；万方对齐当前官方专业检索框。
-- **V1.5 (2026-08-11)**: 修正 IEEE 25-term clause 口径与默认漏词；Query A 完整保留同义词，单词保留词干扩展，多词短语精确匹配；增加 10-wildcard/最小前缀校验；Query D 改为技术层与任务层邻近共现。
-- **V1.4 (2026-08-11)**: 修复 IEEE Command Search 生成器：禁止字段名后直接嵌套 OR 括号，宽泛式恢复 All Metadata，增加 25-term 自动拆分、会议条件式、NEAR/ONEAR 与回归测试。
+This skill is part of the **QueryStrategist** workflow. It serves as the central orchestration module for generating platform-specific search queries across all major academic databases. It is called by **Search Strategist V1** (Step 2) as part of its Search A pathway.
 
 ## Description
 A central query generation orchestrator that automatically invokes all available platform-specific Query Crafter sub-skills to produce a complete set of ready-to-use advanced search queries. Based on the user's review scope and project configuration, it determines which databases to target, calls the corresponding sub-skills in parallel, and compiles a comprehensive multi-platform search query package.

@@ -4,7 +4,7 @@ description: "Wanfang检索式构建器 | 将中文三级关键词转化为万�
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.4
+  version: v1.0.0
   keywords: [Wanfang, search query, Chinese literature, QueryStrategist]
   triggers: [万方, 检索式, 中文文献]
 ---
@@ -24,13 +24,6 @@ This skill is part of the **QueryStrategist** workflow (Step 2). It is invoked b
 
 ## Skill Name
 Wanfang Query Crafter
-
-## Version
-V1.4
-
-## Change Log
-- **V1.4 (2026-08-12)**：改为 A0/A1/B 分层：A0 仅对象+必需技术并使用模糊匹配，不加排除；A1 加入任务与排除；B 使用精确匹配收紧。
-- **V1.3 (2026-08-11)**：按万方当前官方“高级检索/专业检索”界面修正：专业检索由资源类型、字段下拉框和布尔文本框共同组成，生成器输出可粘贴到文本框的 `AND/OR/NOT` 表达式，不再生成官网当前界面未展示的 `主题:(...)` 字段前缀，也不再宣称支持 CNKI 的 `* + -` 运算符。
 
 ## Description
 A specialized query generator for the Wanfang Data platform. It translates a user's research scope into Wanfang's structured **Advanced Search** (高级检索 / 跨库检索) configuration: resource-type scoping, field-level precise matching, 与/或/非 (AND/OR/NOT) logic composition, exact/fuzzy matching, and time-range constraints. The output can be entered row-by-row in Advanced Search or pasted as a Boolean expression after selecting a field in Professional Search.

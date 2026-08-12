@@ -4,7 +4,7 @@ description: "Scopus检索式构建器 | 将三级关键词转化为 Scopus Adva
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.4
+  version: v1.0.0
   keywords: [Scopus, search query, bibliographic, QueryStrategist]
   triggers: [Scopus, 检索式, 高级检索]
 ---
@@ -18,13 +18,6 @@ metadata:
 
 
 # Scopus Query Crafter
-
-## 版本
-V1.4
-
-## 变更记录
-- **V1.4 (2026-08-12)**：改为 A0/A1/B 分层：A0 仅对象+必需技术且不加 `AND NOT`；A1 加入任务与排除；B 使用 `TITLE` 和 `W/5` 收紧。
-- **V1.3 (2026-08-11)**：按 Elsevier Scopus Support Center 当前规则统一 Search A 为 `TITLE-ABS-KEY(对象) AND TITLE-ABS-KEY(必需技术锚点) AND TITLE-ABS-KEY(任务)`；保留 `AND NOT` 末尾规则；删除“省略字段代码即默认全部字段”的未获当前官方 Advanced Search 文档支持的口径。
 
 ## 所属系统
 **QueryStrategist** 工作流 — Search Strategist 子模块

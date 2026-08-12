@@ -4,7 +4,7 @@ description: "Google Scholar检索式构建器 | 将三级关键词转化为不�
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.4
+  version: v1.0.0
   keywords: [Google Scholar, search query, scholar, QueryStrategist]
   triggers: [Google Scholar, 检索式, 学者]
 ---
@@ -20,14 +20,7 @@ metadata:
 # Google Scholar Query Crafter
 
 ## 所属系统
-**QueryStrategist** 工作流（V2.0），作为 Search Strategist V1/V2 中 Search A（Query Crafter）的子模块之一。
-
-## 版本
-V1.4
-
-## 变更记录
-- **V1.4 (2026-08-12)**：改为 A0/A1/B 分层；A0 仅对象+必需技术，A1 加入任务，B 使用 `intitle:` 收紧。长词表采用最多 6 条按序配对的互补查询，取消三层笛卡尔积。
-- **V1.3 (2026-08-11)**：Search A 改为“对象 + 必需技术锚点 + 任务”三概念强制共现；长词表不再静默截断，而按字符预算生成多条互补查询，所有查询均保留对象层和技术锚点，任务词跨查询完整覆盖。
+**QueryStrategist** 工作流，作为 Search Strategist V1 中 Search A（Query Crafter）的子模块之一。
 
 ## 描述
 专门为 Google Scholar 平台生成可直接使用的高级检索式。严格遵守 Google Scholar 的语法规则，确保检索结果精准、可复现。

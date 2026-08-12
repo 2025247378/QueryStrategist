@@ -4,7 +4,7 @@ description: "CNKI检索式构建器 | 将中文三级关键词转化为知网�
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.3
+  version: v1.0.0
   keywords: [CNKI, search query, Chinese literature, QueryStrategist]
   triggers: [CNKI, 知网, 中文检索式, 中文文献]
 ---
@@ -24,13 +24,6 @@ This skill is part of the **QueryStrategist** workflow (Step 2). It is invoked b
 
 ## Skill Name
 CNKI Query Crafter
-
-## Version
-V1.3
-
-## Change Log
-- **V1.3 (2026-08-12)**：改为 A0/A1/B 分层：A0 为 `SU=对象 AND SU=必需技术` 且不加排除；A1 加入任务与排除；B 使用题名/主题字段收紧。
-- **V1.2 (2026-08-11)**：总控生成器优先读取独立的 `keyword_tiers_zh` / `explicit_exclusions_zh`，避免把英文词表原样交给中文库；Search A 统一要求对象、必需技术锚点、任务三概念共现，各概念内部使用 OR 扩展。
 
 ## Description
 A specialized query generator for the CNKI platform. It translates a user's research scope into syntactically flawless CNKI advanced search queries. This skill strictly applies CNKI's specific logical operators (`*`, `+`, `-` in the single-box advanced search; `AND`/`OR`/`NOT` between fields in professional search), field codes (`SU=`, `TI=`, `KY=`, `AB=`, `FT=`, etc.), proximity operators (`/NEAR N`, `/PREV N`, `/AFT N`, `/SEN N`, `#`, `%`), and formatting rules (half-width characters, mandatory spaces) to ensure the query works correctly when pasted into the CNKI advanced or professional search interface.

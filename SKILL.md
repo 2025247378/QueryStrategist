@@ -17,24 +17,9 @@ metadata:
 
 ---
 
-## Version
-QueryStrategist 单包版（Step 0–2）— 2026-08-11 检索策略版
+## 当前版本
 
-## Change Log
-- **v1.0.0 (2026-08-12)**: 首个正式发布版。六库 Search A 统一为 A0/A1/B 分层：A0 仅对象+必需技术且不加任务/排除/年份/文献类型，A1 为三层主题检索并承接排除，B 使用平台专属字段或邻近规则；Google Scholar 取消三层笛卡尔积并将 A0/A1 各限制在最多 6 条互补查询。
-- **V4.8.0 (2026-08-12)**: Search B 在访问 OpenAlex/Crossref 前增加一次明确网络授权，脚本增加 `--network-consent` 强制保护；IEEE 根据真实零命中案例增加对象召回锚点，并将检索层级调整为 A0 对象+技术召回基线、A1 三层主题式、B 题名对象+技术。
-- **V4.7.0 (2026-08-11)**: 将离线 HTML 升级为面向研究者的检索工作台：新增 `index.html` 总入口、统一导航与目录、六库检索式标签页和复制按钮、候选文献搜索/状态/OA/年份筛选及排序、打印样式和移动端布局；全部 CSS/JS 内嵌，无 CDN 依赖。
-- **V4.6.0 (2026-08-11)**: 优化最终交付可读性：Markdown/CSV 统一 UTF-8 BOM，移除正文中易乱码状态符号，为四件套 Markdown 生成内嵌样式的离线 HTML；检索式代码块保持原样并增加渲染回归测试。
-- **V4.5.0 (2026-08-11)**: 补齐 Search B 对象/技术/任务/排除参数契约；统一 IEEE A/B/C/D1/D2/E 与全量候选输出口径；新增项目状态校验、SCP 原子覆盖保护、固定 Harvester 依赖和平台验收清单。
-- **V4.4.0 (2026-08-11)**: 落实发布复盘优化：Search B 精准式改为平台专属收紧规则；Search A 缺失必需关键词层时快速失败；Harvester 接入 OpenAlex 三层过滤并支持标题/摘要排除；SCP 构建增加敏感文件过滤、覆盖保护和构建 manifest；校验器增加 VERSION/README/RUN 一致性检查与回归测试。
-- **V4.3.2 (2026-08-11)**: 对照平台规则统一修正 Search A 六库生成逻辑：固定为“对象层 AND 必需技术锚点 AND 任务层”；拆分必需技术与支持方法；为 CNKI/万方增加独立中文词表与排除项；修正 WoS、Scopus、IEEE、Google Scholar、CNKI、万方的字段、布尔、邻近、通配符、长度/term 限制及拆分策略，并增加六库回归测试。
-- **V4.3.1 (2026-08-11)**: 修复 IEEE Xplore Command Search 生成器：移除无效的 `"Field":(A OR B)`，增加 25-term 自动拆分、All Metadata 宽泛式、逐项字段限定、NEAR/ONEAR 与回归测试。
-- **V4.3.0 (2026-08-10)**: 落实发布复盘 P0/P1：Search B 增加真实 API 配额守卫与 dry-run；统一 6 平台口径并补齐 Wanfang；标准化写作类型/年份配置透传；修复共享校验器 Windows 编码失败；清理演示材料中的已移除引擎描述。
-- **V4.2 (2026-08-09)**: 触发方式新增「演示模式提示」——为录屏/评审演示，入口统一用「开始文献检索」+ 全程固定话术（Setup Wizard Step 0.6），保证输出逐字一致、可复现。
-- **V4.1 (2026-08-09)**: 从"套件总入口（11 个独立子 Skill）"升级为"**单包主 Skill**"（Skills 广场上架形态）：编排器全部逻辑合并进根 SKILL.md；11 个子 Skill 指令文件改为 `SKILL.sub.md`（子模块形态）；新增"子模块执行机制"（读 `SKILL.sub.md` 内联执行，禁止幽灵动作）。
-- **V4.0 (2026-08-09)**: 从 AI for Review（Step 0–3 综述套件）精简为 QueryStrategist（Step 0–2 检索策略生成器）。移除综述选题模块（Step 3 及全部相关资产）；终点产出改为「检索策略包（范围卡 + 6 库检索式 + 文献候选清单 + 使用说明）」；决策门收缩为 G0–G2；Setup Wizard 的"综述类型"扩展为"写作类型"并按类型调检索策略权重。（旧口径，已被 V4.1 取代）
-- **V3.0 (2026-07-31)**: 精简为 Step 0–3，移除 Step 4–8。（旧口径，仅存于变更记录）
-- **This release**: A self-contained human-in-the-loop pipeline covering Steps 0–2 — from project configuration and scope definition, through dual-channel retrieval, to search strategy pack delivery. Mandatory confirmation gates (G0–G2) keep the human in control at every decision point. The deliverable is a search strategy pack (scope card + multi-platform queries + candidate list + usage guide).
+- **v1.0.0（2026-08-12）**：首个正式发布版本。
 
 ---
 

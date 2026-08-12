@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.24
+  version: v1.0.0
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -20,36 +20,7 @@ metadata:
 # Search Strategist V1
 
 ## QueryStrategist System
-This skill is part of the **QueryStrategist** workflow (V2.0, Step 2). It receives the Review Scope Confirmation Document from Scope Definer and performs the first round of literature retrieval, focusing primarily on **review articles**, delivering the search strategy pack as the pipeline's final output.
-
-## Version
- V1.24
-
-## Change Log
-- **V1.24（2026-08-11 Search B 网络授权）**: 在 OpenAlex/Crossref 联网前增加一次明确授权；授权在当前流水线运行及 Retry 中复用，拒绝时仅跳过 Search B，Search A 与检索策略包交付继续。主流程固定使用 Crossref 匿名公共池，不提交 `mailto`；`harvest.py` 联网命令必须带 `--network-consent`。
-- **V1.23（2026-08-11 HTML 工作台）**: 新增 `index.html` 默认入口、统一导航和本页目录；检索式页增加数据库标签页与复制按钮；候选清单增加搜索、验证状态/OA/年份筛选和表头排序；增加打印和移动端样式，全部资源内嵌且离线可用。
-- **V1.22（2026-08-11 交付格式优化）**: 检索策略包 Markdown/CSV 统一 UTF-8 BOM；从同名 Markdown 自动生成离线 HTML 作为默认阅读入口；正文状态标记改为纯文本，检索式代码块禁止改写；新增编码、U+FFFD、代码块与 HTML 落盘校验。
-- **V1.20（2026-08-10 OA 简化）**: OA 状态改为**收割时直接附带**（用户决策）——OpenAlex 收割响应原生携带 `open_access` 字段，`harvest.py`（V2.1）通过 `select=open_access` 一次请求同时拿到 `is_oa` / `oa_status`，**零额外 API 调用、零额外错误点**。历史版本的 `scripts/enrich_oa.py` 方案已废弃删除，不再有独立回查环节。
-- **V1.19（2026-08-10 修复·防"Search B 没返回结果"复发）**: 新增 **Step 3.5「后台任务同步展示铁律（MANDATORY）」**——Search B 若为后台长任务，禁止在启动后立即结束回合；必须**等待任务完成 → 校验输出文件存在且 >0 → 在同一回合内内联展示 Part B 全量结果**（统计表 + 全部候选 + dropped 样例），否则用户会看到"没有返回结果"（本次真实事故）。新增「后台任务启动 → 等待完成 → 校验落盘 → 同步展示」四段式约束、任务未完成时的正确话术、以及`wc -c`/统计字段双校验。同时修复 Step 4 标题中残留的 `??` 乱码。
-- **V1.18**: Search B 精简为两源（与 Literature Harvester V2.0 对齐，用户决策 2026-08-10）——(1) **Step 1.5 整段删除**：Semantic Scholar Key 询问、Scholar-KG 适用性判断与门控、Crossref 访问池询问、两份申请指南全部移除，改为「零密钥零弹窗」说明；(2) Step 1.4 预告表改为固定两行（OpenAlex 收割 + Crossref 验证）；(3) Step 3 参数精简为 `verify` + 可选 `mailto`；(4) Part B 输出与 JSON Schema 增加 `verified / unverified / dropped` 三态验证分层；(5) Summary Statistics 引擎数 2。
-- **V1.17**: Part B 文献表新增 **「OA状态」列** + DOI 改为**可点击的完整 `https://doi.org/` 链接**（按用户需求）。OA 状态通过对每篇 DOI 回查 OpenAlex `open_access.is_oa` / `open_access.oa_status` 判定。新增可复用脚本 `scripts/enrich_oa.py`：生成报告前运行，自动把 `is_oa` / `oa_status` / `doi_link` 写回 metadata JSON。脚本 mailto 从参数/环境变量读取，不在发布包硬编码私人邮箱。
-- **V1.16**: 新增 **Safe File Persistence** 硬规则（Step 5）——V1 报告（Part A 全检索式 + Part B 65+ 条）体量较大，禁止用 Bash heredoc 内联生成（会撞 ~1.5–2 KB 命令行上限导致 `unexpected EOF` 并陷入重试循环），也禁止 sandbox / 非 sandbox Bash 混用（导致 split-brain、静默产出 0 字节文件）。改为：用 Write 工具写一个小生成器 `.py` 读 `literature_collection_v1_metadata.json` 产出 `.md`，再 **单次** `dangerouslyDisableSandbox: true` Bash 执行；写后必须 `wc -c` 校验 > 0。此规则固化了一次实际运行卡死的根因修复。
-- **V1.15**: 精简 Step 1.5 交互——(1) S2 弹窗申请教程压缩为 4 步骨架（去掉用途/Endpoints/每日请求量等细节）；(2) 把 Scholar-KG 适用性说明从弹窗 question 文案中移除，**改为放在弹窗前的叙述文字里**，并做成**条件式**（域适用则写"含 Scholar-KG"，域不适用则写"跳过 Scholar-KG"），强调不写死、需随领域变通；(3) 同步精简英文版弹窗文案。
-- **V1.14**: Step 1.5 交互重构——(1) Step 1.4 预告表中 Crossref「是否需要 Key/池」列改为「可选池（Polite/Plus/Public）」；(2) 将 S2 Key 与 Crossref 访问池拆分为**两次独立 AskUserQuestion 弹窗**，且每个弹窗的 question 文本内嵌**简要申请教程/说明**，方便用户边看边申请。
-- **V1.13**: 新增 **Step 1.4「Search B 引擎启用计划预告」**（MANDATORY，置于 Step 1.5 之前）——在询问任何 API Key / 访问池之前，先用表格向用户透明预告本轮 Search B 实际启用的引擎（OpenAlex 默认主干 / Crossref 池 / Semantic Scholar 是否低速 / Scholar-KG 是否跳过及原因）。解决"直接跳到 Key 询问、用户不清楚整体方案、逐源追问"的体验问题；预告后再进入 Step 1.5 的 Key / 池询问。
-- **V1.11**: Step 1.5 修订——用户选择「提供某 Key」选项后，若回复中未携带 Key 字符串，必须【立即停止】并立即用纯文本提示用户粘贴 Key，**不得**先以无 Key 模式启动 Search A / Search B 占位运行。修正了"先跑无 Key 版本、之后再追问 Key"的错误流程——收到 Key 后才同时开始 Search A（检索式）与 Search B（API 收割）；仅当用户明确选「都不需要」时才以无 Key 模式立即跑 A+B。
-- **V1.12**: Crossref 增补源接入 Search B 编排层——与 Literature Harvester V1.6 的 Crossref 固化（`query.bibliographic` 写死、默认源含 crossref）对齐。Step 1.5 新增独立 Crossref 访问池弹窗（polite 需真实 mailto / plus 付费 / public 匿名）；Step 3 将 `crossref_mode` / `mailto` / `plus_token` 透传给 Literature Harvester；Summary Statistics 引擎数 2→3；元数据 JSON `part_b_statistics` 增 `crossref_results`；Part B 检索统计表增 Crossref 列。
-- **V1.9**: 删除 Step 5.5（G2）中英文版的 PDF 数量建议句（"预计需要准备 30–50 篇 PDF 即可满足选题挖掘需求" / "Approximately 30–50 PDFs should be sufficient for topic discovery"），不再对 PDF 篇数做预估暗示。
-- **V1.10**: Step 5.5（G2）筛选建议强化「以综述为主」——明确文献应以 review/survey 类为主、占比过半用于搭框架；同时保留少量高被引原创研究作方法/实证支撑，避免全综述缺一手证据。中英文版同步。
-- **V1.8**: 修正 Step 5.5（G2）PDF 下载交接提示——明确用户须**整合两条通道**（通道 A 手工检索式 Part A + 通道 B API 收割文献 Part B）检索到的全部文献，将二者筛选后下载的 PDF **统一放入同一文件夹**；不再把 Part B 仅当作"定位辅助"，并删除硬编码的"80 篇"数字，改为动态表述。强调下游只读取真实 PDF。
-- **V1.6**: Added **No Phantom Actions** hard rule at Step 2 and Step 3 — "Invoke the Query Crafter / Literature Harvester sub-skill" is now an explicit TOOL-CALL DIRECTIVE. The assistant MUST issue the actual `Skill` tool call; it is forbidden from merely narrating "loading X" and ending the turn without the call. This fixes the failure mode where the prompt existed but the sub-skill was never actually loaded.
-- **V1.7**: Reinforced the **"harvested ≠ corpus" principle** — harvested metadata (Search B) / surfaced papers (Search A) frequently contain fabricated/mismatched/misspelled entries (AI hallucination). V1 output is ONLY a candidate reference for the user to vet and decide downloads; the assistant MUST NOT feed harvested entries downstream as corpus. Added an IMPORTANT callout, aligned with orchestrator "Data Flow Principle".
-- **V1.5**: Added **Step 5.5: PDF Download Handoff (MANDATORY)** — a standalone, mandatory gate between V1 and the downstream topic-selection module. This step blocks the assistant from loading that module until the user returns with a PDF folder path. (旧口径：Step 5.5 已随 V4.0 改为检索策略包交付，不再有 PDF 交接与下游模块加载。) Previously, the PDF download instruction was buried inside Step 5's "Next Steps" sub-section; when the user chose not to save files, the instruction was lost entirely, and the assistant would prematurely load the topic-selection module and ask "PDF vs metadata mode" — which is incorrect, because that module's standard workflow requires PDFs. Now the handoff is explicit, always-executes, and includes clear download instructions + estimated 30-50 PDF count.
-- **V1.4**: When user selects "我去申请" / "Let me apply" in Step 1.5, immediately display a detailed **API Key Application Guide** with: (1) step-by-step instructions clarifying that the key is sent via email (not in a dashboard), (2) pre-filled templates for all form fields (usage description, endpoints, daily requests), (3) a low-speed fallback offer so the user can proceed without waiting. Previously the skill only said "wait until they return" with zero guidance, causing significant friction.
-- **V1.3**: Step 1.5 API Key question MUST be presented via `AskUserQuestion` tool (interactive popup), NOT as plain text. Ensures consistent popup UX every time the skill is activated, without requiring user reminders.
-- **V1.2**: Added Semantic Scholar API Key check (Step 1.5). Before executing Search B, the user is asked whether they have or want to apply for a free Semantic Scholar API key. The key status is passed to Literature Harvester, which adjusts its request rate accordingly (10 req/s with key vs 1 req/s without). Anti-rate-limiting strategies (429 backoff, request spacing, OpenAlex fallback) are now built into Literature Harvester V1.1.
-- **V1.1**: Part A (all database queries) and Part B (all harvested literature entries) MUST be displayed inline in chat in full detail. Do NOT save output files before the user provides a folder path.
-- **V1.1**: After inline display, ask user for save directory before writing any files to disk.
+This skill is part of the **QueryStrategist** workflow (Step 2). It receives the Review Scope Confirmation Document from Scope Definer and performs the first round of literature retrieval, focusing primarily on **review articles**, delivering the search strategy pack as the pipeline's final output.
 
 ## Description
 A dual-pathway literature retrieval module for the first round of literature search. It simultaneously executes two independent pathways: **Search A (Query Crafter)** generates platform-specific advanced search queries for manual execution on authoritative databases, and **Search B (Literature Harvester)** harvests literature metadata from **OpenAlex** and **cross-verifies each entry via Crossref by DOI** (filtering out hallucinated/mis-attributed entries; zero keys required). Both pathways prioritize review articles (reviews, surveys, state-of-the-art papers). The outputs are merged into the four-piece search strategy pack (scope card + query pack + candidate list + usage guide) delivered at the end of Step 2.
@@ -164,7 +135,7 @@ Receive the compiled multi-platform query package from Query Crafter.
 
 Literature Harvester will:
 - Harvest candidate metadata from **OpenAlex** (the sole harvest source)
-- **Cross-verify each entry via Crossref by DOI** (title similarity ≥0.8, year delta ≤1) — V2.0 verification layer
+- **Cross-verify each entry via Crossref by DOI** (title similarity ≥0.8, year delta ≤1)
 - Split results into `verified` / `unverified` / `dropped` (suspected hallucination/mis-attribution)
 - Compile a unified verified-candidate literature list
 
@@ -172,7 +143,7 @@ Receive the compiled harvesting + verification report from Literature Harvester.
 
 ### Step 3.5: 后台任务同步展示铁律（MANDATORY — 防"Search B 没返回结果"）
 
-**⚠️ CRITICAL (V1.19 — 由真实事故固化):** 若 Search B（收割+验证）作为**后台任务**运行，本步骤是**硬性约束**——禁止在启动 Search B 后立即结束回合并抛下一句"正在后台运行，稍后展示"。那会导致用户界面长时间只看到"没有返回结果"（本次实际发生：任务 1m39s 完成、结果完整，但上一回合只写了"正在后台运行"，用户误以为失败）。
+**⚠️ CRITICAL：** 若 Search B（收割+验证）作为**后台任务**运行，本步骤是**硬性约束**——禁止在启动 Search B 后立即结束回合并抛下一句"正在后台运行，稍后展示"。那会导致用户界面长时间只看到"没有返回结果"。
 
 **四段式约束（缺一不可）**：
 
@@ -186,11 +157,11 @@ Receive the compiled harvesting + verification report from Literature Harvester.
 
 **正确话术（任务仍在跑、但本回合必须结束时——仅此一种合法情况）**：说明"Search B 正在后台运行，预计 X 分钟，**完成后我会在本轮立即展示 Part B 全量结果**，请稍候"。其余情况一律按四段式执行，不得提前结束回合。
 
-> 关联：Step 4 的「?? CRITICAL OUTPUT RULE (V1.1)」要求所有结果内联展示、不截断、不写文件——本条是其**执行前置**：先等任务完成，再展示。
+> 关联：Step 4 的「CRITICAL OUTPUT RULE」要求所有结果内联展示、不截断、不写文件——本条是其**执行前置**：先等任务完成，再展示。
 
 ### Step 4: Display Full Results Inline in Chat (DO NOT SAVE YET)
 
-**⚠️ CRITICAL OUTPUT RULE (V1.1):** 
+**⚠️ CRITICAL OUTPUT RULE:**
 All results MUST be displayed **inline in the chat message** in full detail. Do NOT summarize, do NOT truncate, do NOT say ""results saved to file"", and do NOT write any files to disk yet.
 
 Display the following in order:
@@ -232,23 +203,23 @@ In English if the user entered in English:
 3. **Save a structured JSON metadata file as `literature_collection_v1_metadata.json` in the same directory** (see JSON Schema below)
 4. Confirm the save location to the user
 
-**⚠️ Safe File Persistence (V1.16 — CRITICAL, prevents the empty-report hang):**
+**⚠️ Safe File Persistence (CRITICAL, prevents the empty-report hang):**
 The V1 report Markdown is large (Part A full queries + Part B 65+ entries). Persisting it via a Bash heredoc is fragile and was the root cause of a previous multi-minute non-completion. Follow the orchestrator's **Hard Rule — Bash Sandbox Consistency & Safe File Persistence**:
 - **Do NOT embed the report text in a Bash heredoc** (`cat <<'EOF'` / `python <<'PYEOF'`). The command hits the Bash length cap (~1.5–2 KB) and gets truncated → `unexpected EOF` parse error; retrying the same pattern loops forever.
 - **Do NOT mix sandbox and non-sandbox Bash.** A `cat > file` under a normal (sandboxed) Bash call writes to a throwaway FS layer, invisible to a later `dangerouslyDisableSandbox` Bash call or to Read/Write tools → silently produces a 0-byte file.
 - **Correct pattern:** Write a small generator script (e.g. `gen_report.py`) via the **Write tool** (no length cap), reading `literature_collection_v1_metadata.json` and emitting the `.md`. Then run it in **ONE** `dangerouslyDisableSandbox: true` Bash call. This sidesteps both bugs at once.
 - **Verify after write:** Immediately `wc -c literature_collection_report_v1.md` and confirm > 0. If 0 bytes, the write failed — do not proceed silently. (The same applies to the metadata JSON.)
 
-**OA 状态获取（V1.20 — 收割时直接附带，无需回查）：**
-OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_status`，取值 open/gold/green/hybrid/bronze/closed）。`harvest.py`（V2.1）已通过 `select=open_access` 在收割时一次性附带，**每条记录自带 `is_oa` / `oa_status`，零额外 API 调用、零额外错误点**。
-- 原 V1.17 的 `scripts/enrich_oa.py` 逐篇回查方案**已废弃删除**（V1.20）：不再按 DOI 回查 OpenAlex open_access，不再有回查脚本、回查字段与相关容错分支。
+**OA 状态获取（收割时直接附带，无需回查）：**
+OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_status`，取值 open/gold/green/hybrid/bronze/closed）。`harvest.py` 已通过 `select=open_access` 在收割时一次性附带，**每条记录自带 `is_oa` / `oa_status`，零额外 API 调用、零额外错误点**。
+- 不使用 `scripts/enrich_oa.py` 逐篇回查 OpenAlex open_access；当前发布包不包含该脚本或相关回查分支。
 - 渲染规则不变：DOI 列 = `[https://doi.org/<doi>](https://doi.org/<doi>)`；OA状态列 = `OA期刊 (<oa_status>)` 当 `is_oa` 为 true，否则 `非OA期刊 (<oa_status>)`，缺失时为 `未知`。在 Part B 统计区加按来源的 OA 汇总。
 
 **Literature Collection V1 Metadata JSON Schema** (save alongside the .md report):
 
 ```json
 {
-  "report_version": "V1.4",
+  "report_version": "v1.0.0",
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
     "search_focus": "review-priority",
@@ -278,10 +249,10 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
       "first_author": "...",
       "year": YYYY,
       "doi": "10.xxx/...",
-      "doi_link": "https://doi.org/10.xxx/...",   // V1.17: full clickable link
-      "is_oa": true,                               // V1.19: 收割时 OpenAlex 原生附带（原 V1.17 回查方案已废弃）
-      "oa_status": "gold",                         // V1.19: open/gold/green/hybrid/bronze/closed/未知
-      "verification": "verified | unverified | dropped",   // V2.0: Crossref 逐条验证状态
+      "doi_link": "https://doi.org/10.xxx/...",   // full clickable link
+      "is_oa": true,                               // 收割时由 OpenAlex 原生附带
+      "oa_status": "gold",                         // open/gold/green/hybrid/bronze/closed/未知
+      "verification": "verified | unverified | dropped",   // Crossref 逐条验证状态
       "verification_detail": {"reason": "match | title_mismatch | year_mismatch | doi_not_found", "similarity": 0.98},
       "source": "OpenAlex"
     }
@@ -297,7 +268,7 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 
 ### Step 5.5: Deliver Search Strategy Pack (MANDATORY — pipeline endpoint, G2)
-**CRITICAL (V4.0): Search Strategist V1 是 QueryStrategist 主流水线（Step 0–2）的终点。Step 5 保存文献采集报告后，立即进入本步，把结果收敛为检索策略包四项逻辑交付物（范围卡 + 6 库检索式合集 + 文献候选清单 + 使用说明）。每份 Markdown 同步生成离线 HTML，CSV/Markdown 使用 UTF-8 BOM；HTML 是默认阅读入口。然后停在 G2 决策门等用户确认。本步不加载任何下游综述选题模块，不询问 PDF 文件夹路径，不替用户下载 PDF。**
+**CRITICAL：Search Strategist V1 是 QueryStrategist 主流水线（Step 0–2）的终点。Step 5 保存文献采集报告后，立即进入本步，把结果收敛为检索策略包四项逻辑交付物（范围卡 + 6 库检索式合集 + 文献候选清单 + 使用说明）。每份 Markdown 同步生成离线 HTML，CSV/Markdown 使用 UTF-8 BOM；HTML 是默认阅读入口。然后停在 G2 决策门等用户确认。本步不加载任何下游综述选题模块，不询问 PDF 文件夹路径，不替用户下载 PDF。**
 
 **为什么有本步：** 检索策略包是主流水线的最终交付物——AI 把"检索策略"（范围卡 + 检索式 + 候选清单 + 使用说明）做对做好，下载 PDF 与写作是用户自己的事。模板见 `assets/search_strategy_pack_template.md`；所有字段标注上游出处（【继承自 Step 0/1/2】），禁止凭空生成。
 
@@ -363,10 +334,10 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 | 2 | [Full title] | [Author] | [Year] | [https://doi.org/...](https://doi.org/...) | [待人工核验] unverified | OA期刊 (gold) / 非OA期刊 (closed) / 未知 |
 | ... | ... | ... | ... | ... | ... | ... |
 
-> **V2.0 — 验证状态渲染规则（强制）：**
+> **验证状态渲染规则（强制）：**
 > - **verification 列**：`[已验证] verified`（Crossref 按 DOI 回查通过）/ `[待人工核验] unverified`（无 DOI 或验证瞬时失败，保留供人工参考）/ `[已剔除] dropped`（验证不通过，不进主表，另列典型例子）。最终文件禁止使用 Emoji 表示状态。
-> - **V1.17 — DOI 必须是可点击的完整链接**：单元格写为 `[https://doi.org/<doi>](https://doi.org/<doi>)`（即在 DOI 前加 `https://doi.org/` 前缀），不要只写裸 `10.xxxx`。
-> - **V1.20 — 「OA状态」列**：值为 `OA期刊 (<oa_status>)`、`非OA期刊 (<oa_status>)` 或 `未知`。`is_oa` 与 `oa_status` 来自收割时 OpenAlex 原生附带的 `open_access` 字段（V1.20 起不再逐篇回查）。
+> - **DOI 必须是可点击的完整链接**：单元格写为 `[https://doi.org/<doi>](https://doi.org/<doi>)`（即在 DOI 前加 `https://doi.org/` 前缀），不要只写裸 `10.xxxx`。
+> - **「OA状态」列**：值为 `OA期刊 (<oa_status>)`、`非OA期刊 (<oa_status>)` 或 `未知`。`is_oa` 与 `oa_status` 来自收割时 OpenAlex 原生附带的 `open_access` 字段，不再逐篇回查。
 > - 在 Part B 统计区新增一行验证汇总：`验证通过：V 篇 / 无 DOI 待人工：U 篇 / 验证剔除：D 篇`。
 
 ---
@@ -380,11 +351,11 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 | Total Search Effort | Manual queries: [N] databases + Automated: OpenAlex harvest + Crossref verification |
 
 ## Important Notes
-- **V2.5 CRITICAL**: Search B = **OpenAlex 收割 + Crossref 逐条验证**，零密钥，但联网前必须询问一次网络访问授权。Semantic Scholar / Scholar-KG 及其 Key 询问、申请指南、门控规则已删除；不要询问任何 API Key / 访问池。用户拒绝时跳过 Search B，Search A 与交付继续。
-- **V2.0 CRITICAL**: 验证是去幻觉核心——Crossref 按 DOI 回查比对 title（相似度≥0.8）与 year（|Δ|≤1），不通过 → `dropped`（疑似幻觉/错配）；无 DOI → `unverified`。展示时用 `verified / unverified / dropped` 三态，绝不把 `dropped` 混进候选清单。
-- **V4.0 CRITICAL**: After Search A + Search B results are displayed (and Step 5 save is handled), the assistant MUST execute **Step 5.5: Deliver Search Strategy Pack**. This is the pipeline endpoint (G2). Do NOT load any downstream topic-selection module (removed in V4.0, not part of this suite), do NOT ask the user for a PDF folder path, do NOT offer to auto-download PDFs. Deliver the four-piece pack and stop at the G2 gate for user confirmation.
-- **V1.1 CRITICAL**: Part A (all queries) and Part B (all harvested literature) MUST be inline in chat, never summarized or file-only.
-- **V1.1 CRITICAL**: Do NOT save any file to disk until the user provides a save directory path in Step 5.
+- **CRITICAL**: Search B = **OpenAlex 收割 + Crossref 逐条验证**，零密钥，但联网前必须询问一次网络访问授权。不要询问任何 API Key / 访问池。用户拒绝时跳过 Search B，Search A 与交付继续。
+- **CRITICAL**: 验证是去幻觉核心——Crossref 按 DOI 回查比对 title（相似度≥0.8）与 year（|Δ|≤1），不通过 → `dropped`（疑似幻觉/错配）；无 DOI → `unverified`。展示时用 `verified / unverified / dropped` 三态，绝不把 `dropped` 混进候选清单。
+- **CRITICAL**: After Search A + Search B results are displayed (and Step 5 save is handled), the assistant MUST execute **Step 5.5: Deliver Search Strategy Pack**. This is the pipeline endpoint (G2). Do NOT load any downstream topic-selection module, do NOT ask the user for a PDF folder path, and do NOT offer to auto-download PDFs. Deliver the four-piece pack and stop at the G2 gate for user confirmation.
+- **CRITICAL**: Part A (all queries) and Part B (all harvested literature) MUST be inline in chat, never summarized or file-only.
+- **CRITICAL**: Do NOT save any file to disk until the user provides a save directory path in Step 5.
 - This skill calls two sub-skills (Query Crafter and Literature Harvester) and merges their outputs. It does not directly generate queries or call APIs.
 - The search focus for Search Strategist V1 is `review-priority` when the Step 0 writing type is 综述; adjust per writing type (论著查准 / 开题基金新颖性).
 - The search strategy pack delivered at Step 5.5 (scope card + query pack + candidate list + usage guide) is the pipeline's final deliverable and the end of the QueryStrategist flow.

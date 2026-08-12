@@ -4,7 +4,7 @@ description: "IEEE Xplore检索式构建器 | 将三级关键词转化为 Advanc
 license: MIT
 metadata:
   skill-author: PanY
-  version: 2.0
+  version: v1.0.0
   keywords: [IEEE Xplore, command search, search query, engineering, QueryStrategist]
   triggers: [IEEE, 检索式, 工程文献, IEEE Xplore, Command Search, command search]
 ---
@@ -21,17 +21,6 @@ metadata:
 
 ## QueryStrategist System
 This skill is part of the **QueryStrategist** workflow (Step 2). It is called by **Search Strategist V1** to generate platform-specific advanced search queries for IEEE Xplore. The queries are used by the user for manual retrieval of high-quality literature, primarily in computer science, electrical engineering, and related interdisciplinary fields.
-
-## Version
-V2.0
-
-## Change Log
-- **V2.0 (2026-08-12)**: 与六库统一分层口径对齐：A0 明确不附带排除项，A1/B 继续应用排除项；保留已实测有效的对象+技术召回结构。
-- **V1.9 (2026-08-12)**: 依据 IEEE 官网与真实零命中案例重构召回层级：A0 使用对象+技术的 All Metadata 基线，A1 再加入任务层；B 仅在题名中锁定对象+技术。复合对象词自动补充重复中心词（如 `fish`），或读取 `tier1_recall_anchor`；避免 `aquaculture fish` 等过窄短语和三层全题名强制共现造成 0 结果。
-- **V1.8 (2026-08-11)**: 按 IEEE Xplore 当前官方 Search Tips 修正 25-term 口径：限制作用于“未被布尔运算符分隔的连续检索词”组成的 search clause，不再把整条查询的所有 OR 同义词累计后拆分；保留完整 Query A。单词默认不加引号以保留词干扩展，多词固定短语才加引号；补充每查询最多 10 个通配符及通配符前至少 3 个字符的校验；Query D 改为技术/方法层与应用/任务层的真正 NEAR/ONEAR 共现。
-- **V1.7 (2026-08-11)**: 与 `query_crafter/scripts/query_generator.py` 实现对齐：Query A 默认 All Metadata；Query B 逐项重复 `"Document Title":`；按 25 个 keyword/quoted-phrase values 自动拆分；条件生成 Query C；补齐 NEAR/ONEAR Query D 与自动化回归测试。
-- **V1.6 (2026-08-10)**: 对照 IEEE Xplore 官方 Command Search 帮助页（xplorestaging.ieee.org/Xplorehelp）修正语法口径——**字段名是可选限定符**（官方 Step 1：不写字段名则默认搜全部 metadata，运算符示例 `"wireless sensor network" AND security`、`implantable NEAR/3 cardiac` 均无字段名），不再强制"每个搜索词都带字段名"；保留官方明确禁止的写法（`"Document Title":("a" OR b)` 字段内括号 OR 无效）；Query A/D 模板改为官方风格（无字段名简洁写法 + 可选字段限定说明）；NEAR 用官方简单示例；25 terms 改官方原文口径。修正此前"逐词重复字段名"的过度泛化（V1.5），避免生成与官方风格脱节的查询。
-- **V1.5 (2026-08-10)**: 官网比对后修正 Command Search 语法——完整字段名列表、同字段 OR 禁止括号嵌套（需逐词重复字段名）、每子句 ≤25 terms、Command Search 无独立年份字段。**（注意：V1.5 将"同字段 OR 逐词重复字段名"过度泛化为"每个搜索词都必须带字段名"，与官方默认"无字段名=搜 metadata"矛盾，V1.6 已修正。）**
 
 ## Description
 Transforms a user's research direction into a precise, ready-to-use advanced search query for IEEE Xplore **Command Search** (the free-form query tab under Advanced Search). This skill applies expert-level IEEE Xplore search syntax, including field codes (`"Document Title":`, `"Abstract":`, `"Authors":`, `"Publication Title":`, `"Index Terms":`), Boolean operators (`AND`, `OR`, `NOT`), proximity operators (`NEAR`/`ONEAR` — command search only), phrase searching (`" "`), and wildcards (`*`, `?`). It generates queries optimized for retrieving high-quality engineering, computer-science, and interdisciplinary literature from IEEE conference proceedings, journals, and early-access articles.

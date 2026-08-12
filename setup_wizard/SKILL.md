@@ -4,7 +4,7 @@ description: "文献检索项目预检配置向导 | 锁定写作类型（综述
 license: MIT
 metadata:
   skill-author: PanY
-  version: 2.1
+  version: v1.0.0
   keywords: [literature search, configuration, setup wizard, writing type, QueryStrategist]
   triggers: [文献检索配置, 检索设置, 配置写作类型, setup, 开始配置]
 ---
@@ -18,14 +18,6 @@ metadata:
 
 
 # Setup Wizard
-
-## Version
-QueryStrategist 配置向导（Step 0）— 2026-08-09 检索策略版
-
-## Change Log
-- **V2.1 (2026-08-09)**: 新增「Step 0.6 固定话术脚本（MANDATORY — 逐字输出，禁止润色）」——为演示/评审/日常使用提供逐字一致的 A1 开场白 / A2 提问确认语 / A3 G0 确认门 / A4 G0 交接语 / A5 每项配置影响说明（中英双语模板）；Step 1/2/3 改为强制引用固定话术；7 个配置提问补固定影响说明（A5 逐字，双语）。
-- **V2.0 (2026-08-09)**: 从"综述项目配置"扩展为"文献检索项目配置"。核心变更：`review type`（综述类型）→ `writing type`（写作类型，枚举：综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义）；新增「按写作类型调检索策略权重」逻辑（综述查全/论著查准/开题基金新颖性）；移除"行业报告"为必选项（改为可选）；交付终点从"综述大纲"改为"检索策略包"。品牌从 AI for Review 改为 QueryStrategist。
-- **V1.x**: 综述专用配置向导（历史版本）。
 
 ## 写作类型与策略权重（MANDATORY）
 写作类型决定下游 Search Strategist V1 的检索式版本偏好与候选清单排序方式：
@@ -56,16 +48,6 @@ QueryStrategist 配置向导（Step 0）— 2026-08-09 检索策略版
 
 ## QueryStrategist System
 This skill is part of the **QueryStrategist** workflow, a human-AI collaborative literature search system. It is the mandatory first step (Step 0) before any substantive work begins. The configuration profile generated here is passed to all downstream skills.
-
-## Version
-V3.0
-
-## Change Log
-- **V3.0 (2026-07-31)**: 随流水线收口为 Step 0–3 —— 交付终点由「章节框架 + 证据库（Review Architect / Structured Summarizer）」改为「**选题 + 综述大纲（三件套）**」。（旧口径：综述选题模块已随 V4.0 整模块移除，流水线终点为检索策略包）
-- **V1.4**: 新增「看板一次性展示」硬规则——项目看板（`show_widget`）仅在 Step 0.5 分支 B 的「项目选择」节点展示一次；用户做出选择（继续/新建）后，本会话后续所有步骤、决策门、续跑/重跑/恢复流程均**禁止再次渲染看板**，续跑旧项目改用纯文字摘要。
-- **V1.2**: Step 0.5 门控升级为「可视化看板 + 选择」——检测 `projects/` 后，先用 `show_widget` 渲染项目看板（创建时间、简介、执行进度条、当前 Step、综述类型/语言/期刊、语料规模），再 `AskUserQuestion` 询问继续/新建；工作区无项目时直接输出「工作区没有项目，开始创建新项目」并进入新建。数据源统一为各项目根 `project_meta.json`（缺失回退 `config.json`）。新增 Step→进度% 映射表。
-- **V1.1**: 新增「项目工作区门控 (Project Workspace Gate)」——Step 0 在配置前检测 `projects/` 下已有项目，询问用户「继续过去项目」或「新建项目」；新建则严格隔离，会话内不再读写其他项目目录。配合 `querystrategist_orchestrator` 的「项目隔离」硬规则。
-- **V1.0**: 初始发布。
 
 ## Description
 A pre-flight configuration module that guides the user through a series of structured questions to lock in foundational settings—target language, writing type, target journal tier, literature time span, and auxiliary material needs. The resulting configuration profile ensures that all subsequent skills operate with a coherent, purpose-built direction.
