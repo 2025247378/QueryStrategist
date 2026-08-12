@@ -139,7 +139,7 @@ for doc in ("README.md", "RUN.md"):
     if not os.path.isfile(path):
         continue
     content = open(path, encoding="utf-8").read()
-    doc_version = re.search(r"版本[：:]\s*([0-9]+(?:\.[0-9]+)+)", content)
+    doc_version = re.search(r"版本[：:]\s*(v?[0-9]+(?:\.[0-9]+)+)", content, re.I)
     if doc_version:
         version_values[doc] = doc_version.group(1)
 if version_values and len(set(version_values.values())) > 1:

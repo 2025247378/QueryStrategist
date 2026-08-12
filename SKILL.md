@@ -4,7 +4,7 @@ description: "QueryStrategist 单包主 Skill（Step 0–2）| 基于 LLM 的交
 license: MIT
 metadata:
   skill-author: PanY
-  version: 4.9.0
+  version: v1.0.0
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -21,7 +21,7 @@ metadata:
 QueryStrategist 单包版（Step 0–2）— 2026-08-11 检索策略版
 
 ## Change Log
-- **V4.9.0 (2026-08-12)**: 六库 Search A 统一为 A0/A1/B 分层：A0 仅对象+必需技术且不加任务/排除/年份/文献类型，A1 为三层主题检索并承接排除，B 使用平台专属字段或邻近规则；Google Scholar 取消三层笛卡尔积并将 A0/A1 各限制在最多 6 条互补查询。
+- **v1.0.0 (2026-08-12)**: 首个正式发布版。六库 Search A 统一为 A0/A1/B 分层：A0 仅对象+必需技术且不加任务/排除/年份/文献类型，A1 为三层主题检索并承接排除，B 使用平台专属字段或邻近规则；Google Scholar 取消三层笛卡尔积并将 A0/A1 各限制在最多 6 条互补查询。
 - **V4.8.0 (2026-08-12)**: Search B 在访问 OpenAlex/Crossref 前增加一次明确网络授权，脚本增加 `--network-consent` 强制保护；IEEE 根据真实零命中案例增加对象召回锚点，并将检索层级调整为 A0 对象+技术召回基线、A1 三层主题式、B 题名对象+技术。
 - **V4.7.0 (2026-08-11)**: 将离线 HTML 升级为面向研究者的检索工作台：新增 `index.html` 总入口、统一导航与目录、六库检索式标签页和复制按钮、候选文献搜索/状态/OA/年份筛选及排序、打印样式和移动端布局；全部 CSS/JS 内嵌，无 CDN 依赖。
 - **V4.6.0 (2026-08-11)**: 优化最终交付可读性：Markdown/CSV 统一 UTF-8 BOM，移除正文中易乱码状态符号，为四件套 Markdown 生成内嵌样式的离线 HTML；检索式代码块保持原样并增加渲染回归测试。
