@@ -1,10 +1,10 @@
 ---
 name: cnki_query_crafter
-description: "CNKI检索式构建器 | 中文关键词→中国知网高级检索/专业检索语法（*与/+或/-非，半角运算符，字段代码 SU/TI/KY/AB/FT/AU/AF/JN/YE/FU/CLC，邻近算符 /NEAR N /PREV N /AFT N /SEN N # %，日期 YE BETWEEN），产出高级检索多行式+专业检索式。QueryStrategist子模块，中文文献补充专用。Pure LLM-agent skill; no external MCP server required."
+description: "CNKI检索式构建器 | 将中文三级关键词转化为知网高级/专业检索语法，生成 A0 主题对象+技术召回式、A1 三层主题式和 B 题名/主题精准式，支持 SU/TI/KY/AB 等字段与邻近算符。QueryStrategist 中文补充子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.2
+  version: 1.3
   keywords: [CNKI, search query, Chinese literature, QueryStrategist]
   triggers: [CNKI, 知网, 中文检索式, 中文文献]
 ---
@@ -26,9 +26,10 @@ This skill is part of the **QueryStrategist** workflow (Step 2). It is invoked b
 CNKI Query Crafter
 
 ## Version
-V1.2
+V1.3
 
 ## Change Log
+- **V1.3 (2026-08-12)**：改为 A0/A1/B 分层：A0 为 `SU=对象 AND SU=必需技术` 且不加排除；A1 加入任务与排除；B 使用题名/主题字段收紧。
 - **V1.2 (2026-08-11)**：总控生成器优先读取独立的 `keyword_tiers_zh` / `explicit_exclusions_zh`，避免把英文词表原样交给中文库；Search A 统一要求对象、必需技术锚点、任务三概念共现，各概念内部使用 OR 扩展。
 
 ## Description
@@ -96,19 +97,21 @@ Present the query as (a) a multi-line Advanced Search layout that mirrors the CN
 - **技术层 (Technology/Method)**: [关键词1], [关键词2], ...
 - **应用层 (Application/Task)**: [关键词1], [关键词2], ...
 
-### 2. Recommended CNKI Advanced Search Query (高级检索)
+### 2. A0 召回基线（高级检索）
 `
-Line 1 (主题): (自动驾驶 + 智能网联汽车 + 无人驾驶) * (计算机视觉 + 深度学习)
-Line 2 (篇关摘): 目标检测 + 轨迹预测 + 行人检测 (Logic: AND)
-Line 3 (主题): 安全隐患 - 交通事故 (Logic: NOT)
-`
-
-### 3. Alternative: Professional Search Query (专业检索)
-`
-SU=((自动驾驶 + 智能网联汽车) * (计算机视觉 + 深度学习)) AND KY=(目标检测 + 轨迹预测) AND YE BETWEEN ('2020','2025')
+Line 1 (主题): 自动驾驶 + 智能网联汽车 + 无人驾驶
+Line 2 (主题): 计算机视觉 + 机器视觉 (Logic: AND)
 `
 
-### 4. Usage Guide & Best Practices
+### 3. A1 主题检索（专业检索）
+`
+(SU='自动驾驶' OR SU='智能网联汽车') AND (SU='计算机视觉' OR SU='机器视觉') AND (SU='目标检测' OR SU='轨迹预测') NOT SU='交通事故'
+`
+
+### 4. B 精准检索
+使用 `TI=对象` + `SU=必需技术` + `TI=任务` 收紧；年份和文献类型优先在结果页设置。
+
+### 5. Usage Guide & Best Practices
 - **Step 1**: Go to the CNKI Advanced Search (高级检索) page.
 - **Step 2**: Ensure you have checked `Core Journals` (北大核心) under "Source Type" (文献来源) if you require only high-quality literature.
 - **Step 3**: Paste the query components into the respective search lines. Select the correct `Field` (检索字段) for each line from the dropdown menu.

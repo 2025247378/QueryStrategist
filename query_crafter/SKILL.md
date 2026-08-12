@@ -4,7 +4,7 @@ description: "检索式构建总控 | 自动调用全部6个平台子skill（WoS
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.7
+  version: 1.9
   keywords: [search query, database, orchestration, QueryStrategist]
   triggers: [检索式, query crafter, 检索式总控, 多平台检索]
 ---
@@ -26,7 +26,7 @@ metadata:
 python scripts/query_generator.py --scope scope.json --all
 # 或从命令行直接给词
 python scripts/query_generator.py --t1 "organ-on-a-chip" --t2 "microfluidics" --ex "diagnosis"
-# 精准变体（三层同时命中，用于二次精筛参考）：默认即生成 broad+precise 全 variant，无需额外参数
+# 分层变体：默认生成 A0 召回基线、A1 主题检索和 B 平台专属精准式
 python scripts/query_generator.py --scope scope.json --all
 # 生成平台专属分层检索式；IEEE 按每个 search clause 的 25-term 上限校验并生成 A/B/C/D/E
 python scripts/query_generator.py --scope scope.json --all --variants
@@ -34,19 +34,19 @@ python scripts/query_generator.py --scope scope.json --all --variants
 python scripts/query_generator.py --scope scope.json --package --writing-type "综述" --min-year 2016 --max-year 2026 --chinese-supplement yes
 ```
 
-**检索式宽窄口径（Search A 默认宽泛）**：
-- **`broad=True`（默认，对应 Search A）**：结构为 `领域层(Tier1) AND 必需技术锚点(Tier2 Anchor) AND 应用层(Tier3)`。三类概念必须同时命中，同层同义词用 `OR` 扩展；高召回来自同义词覆盖和宽字段，而不是把不同概念层互相 OR。若 Scope 提供 `tier2_required_anchor`，Search A 使用该组作为必需技术；`tier2_supporting_method` 进入补充方法视角。
+**检索式宽窄口径（Search A 分层召回）**：
+- **`broad=True`（默认，对应 A0）**：六库统一使用 `对象层(Tier1) AND 必需技术锚点(Tier2 Anchor)`；不强制任务层，不拼接排除项、年份或文献类型。若 Scope 提供 `tier1_recall_anchor`，A0 将其并入对象组；`tier2_supporting_method` 不得替代必需技术锚点。
+- **`topical=True`（对应 A1）**：使用 `对象层 AND 必需技术锚点 AND 任务层`，并从这一层开始应用经核对的排除项。
 - **`broad=False`（精准变体）**：使用各平台专属收紧规则（例如 WoS 标题 + `NEAR/10`、Scopus 标题 + `W/5`、CNKI 题名/主题字段、万方精确匹配），不替代人工检索式 A。
 
 **`--variants` 多层级检索式（覆盖更全面）**：
-返回 JSON `{platform: [{"variant","label","query"}, ...]}`。除 IEEE 外，各平台默认生成以下 5 个层次：
-- `broad` 宽泛检索（高召回）：领域、必需技术锚点、任务三概念强制共现，各组内部 `OR`。
+返回 JSON `{platform: [{"variant","label","query"}, ...]}`。各平台默认生成以下核心层次：
+- `broad` / A0 召回基线：对象 + 必需技术；不加任务、排除项、年份和文献类型。
+- `topical` / A1 主题检索：对象 + 必需技术 + 任务；允许应用明确排除项。
 - `precise` 精准检索（高精确）：调用各平台专属收紧规则；不能把所有平台简化为同一条“三层 AND”模板。具体规则以各平台子 Skill 和输出标签为准。
-- `angle_tech` 多角度·技术视角：领域层 + 技术层。
-- `angle_app` 多角度·应用视角：领域层 + 应用层。
-- `review` 综述导向：宽泛式 + 各库 review/survey 限定（WoS/Scopus/IEEE 用 review/survey 词 + 文档类型限定，Google Scholar 用 `intitle:review`/`intitle:survey`）。
-- **Google Scholar 特例**：长词表返回 Search A 查询列表。每条都保留领域层与必需技术锚点，任务词按字符预算拆成互补组；多条合起来完整覆盖，禁止静默截断。排除项默认省略并在 `warnings` 中提示。
-- **IEEE 特例**：使用 Command Search 官方语法。Query A 默认检索全部 metadata；Query B 的 `"Document Title":` 限定逐项重复；Query C 仅在输入真实会议/出版物名称时生成；Query D 输出技术层与任务层的 `NEAR/ONEAR`；Query E 为综述导向。25-term 限制按“未被布尔运算符分隔的连续检索词”组成的单个 search clause 校验，不把整条查询的 OR 同义词累计，也不静默拆分或丢词。
+- `review` 综述导向：A1 主题式 + 各库 review/survey 限定。
+- **Google Scholar 特例**：A0 与 A1 分别生成不超过 6 条互补短查询，按分组序号配对，禁止三层笛卡尔积和静默截断；A0 省略排除项。
+- **IEEE 特例**：使用 Command Search 官方语法。A0 为对象+技术的 All Metadata 召回基线；A1 为对象+技术+任务的主题式；B 仅在题名中锁定对象+技术，不强迫任务词也出现在题名；C 仅在输入真实会议/出版物名称时生成；D 输出技术层与任务层的 `NEAR/ONEAR`；E 为综述导向。对象层自动补充重复出现的中心词（如多个复合短语中的 `fish`），也可读取 `tier1_recall_anchor`。25-term 限制按单个连续 search clause 校验。
 - **中文词表与排除项**：CNKI/万方优先读取 `keyword_tiers_zh` / `explicit_exclusions_zh`；缺失时回退主词表并报警。其余平台经 `EXCLUSION_EN_MAP` 处理中文排除描述。
 
 输出可直接粘贴进各库高级检索框。零依赖，可独立运行。使用 --package 时，输出包含 context 与 queries 两部分；时间范围作为各数据库筛选说明的结构化上下文保存，不强行拼入不兼容的平台语法。
@@ -58,9 +58,11 @@ python scripts/query_generator.py --scope scope.json --package --writing-type "�
 This skill is part of the **QueryStrategist** workflow (V2.0). It serves as the central orchestration module for generating platform-specific search queries across all major academic databases. It is called by **Search Strategist V1** (Step 2) as part of its Search A pathway.
 
 ## Version
- V1.7
+ V1.9
 
 ### Change Log
+- **V1.9 (2026-08-12)**: 六库统一采用 A0/A1/B 分层语义：A0 仅对象+必需技术且不加排除，A1 恢复对象+技术+任务并应用排除，B 使用平台专属字段/邻近规则；Google Scholar 取消三层笛卡尔积，A0/A1 各最多生成 6 条互补短查询。
+- **V1.8 (2026-08-12)**: 修复真实 IEEE 零命中案例：IEEE A0 改为对象+技术召回基线，A1 保留三层主题式，B 改为题名对象+技术；对象复合短语自动提取重复中心词作为召回锚点，并支持 `tier1_recall_anchor`。其余五库规则不变。
 - **V1.7 (2026-08-11)**: 精准变体不再复用 Search A 原式：WoS 使用标题对象与 `NEAR/10`，Scopus 使用标题对象与 `W/5`，CNKI 使用题名/主题字段组合，万方启用精确匹配；Search A 缺失对象、技术锚点或任务层时快速失败。
 - **V1.6 (2026-08-11)**: 六库 Search A 统一为三概念强制共现，新增必需技术锚点与中英文双词表；Google Scholar 改为完整互补查询列表；WoS 单词保留词形还原；万方对齐当前官方专业检索框。
 - **V1.5 (2026-08-11)**: 修正 IEEE 25-term clause 口径与默认漏词；Query A 完整保留同义词，单词保留词干扩展，多词短语精确匹配；增加 10-wildcard/最小前缀校验；Query D 改为技术层与任务层邻近共现。
@@ -117,7 +119,7 @@ Based on the analysis, determine which sub-skills to activate:
 ### Step 3: Prepare Inputs for Sub-Skills
 For each activated sub-skill, prepare a standardized input package containing:
 - Three keyword tiers (Species, Technology, Application)
-- Optional required technology anchors (`tier2_required_anchor`) and supporting methods (`tier2_supporting_method`)
+- Optional object/task recall anchors (`tier1_recall_anchor` / `tier3_recall_anchor`), required technology anchors (`tier2_required_anchor`), and supporting methods (`tier2_supporting_method`)
 - Chinese database tiers (`keyword_tiers_zh`) and Chinese exclusions (`explicit_exclusions_zh`) when CNKI/Wanfang are enabled
 - Exclusion keywords (if any)
  - Literature time span (start / end)

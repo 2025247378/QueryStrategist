@@ -25,8 +25,8 @@ scope.json 结构:
     }
 
 输出: JSON {platform: query_string_or_list}；Google Scholar 在长词表下返回互补查询列表。
-      --variants 时输出 {platform: [{variant,label,query}, ...]} 分层组合；IEEE 按
-      Command Search 按每个 search clause 校验 25-term 上限并生成 A/B/C/D/E 变体。
+      --variants 时输出 {platform: [{variant,label,query}, ...]} 分层组合；六库生成
+      A0/A1/B，IEEE 另生成 C/D/E 并按每个 search clause 校验 25-term 上限。
 """
 import argparse
 import json
@@ -126,8 +126,8 @@ def _fmt_excl_terms(terms):
 
 
 # ---------- 各平台语法构建器 ----------
-# Search A 默认 broad=True：领域、必需技术锚点、任务三概念强制共现；
-# 每个概念组内部用 OR 扩展召回。
+# Search A 采用统一分层语义：A0 对象+必需技术（不加任务/排除），
+# A1 对象+必需技术+任务，B 再按平台字段/邻近规则收紧。
 
 
 def _tier_groups(tiers):
@@ -152,34 +152,59 @@ def _search_tiers(tiers):
     return t1, t2, t3
 
 
-def _validate_required_tiers(tiers, context="scope"):
-    """Fail fast when Search A cannot enforce its three required concepts."""
-    labels = ("tier1 object", "tier2 required technology anchor", "tier3 task")
-    for label, terms in zip(labels, _search_tiers(tiers)):
+def _recall_tiers(tiers):
+    """Return A0 object terms (including explicit recall anchors) and technology."""
+    t1, t2, _ = _search_tiers(tiers)
+    anchors = (
+        tiers.get("tier1_recall_anchor")
+        or tiers.get("tier1_broad_anchor")
+        or []
+    )
+    if isinstance(anchors, str):
+        anchors = [anchors]
+    object_terms = list(dict.fromkeys(
+        str(term).strip() for term in list(t1 or []) + list(anchors or [])
+        if str(term).strip()
+    ))
+    return object_terms, t2
+
+
+def _validate_required_tiers(tiers, context="scope", require_task=True):
+    """Validate A0's two required tiers and, for layered output, the task tier."""
+    labels = ["tier1 object", "tier2 required technology anchor"]
+    values = list(_search_tiers(tiers)[:2])
+    if require_task:
+        labels.append("tier3 task")
+        values.append(_search_tiers(tiers)[2])
+    for label, terms in zip(labels, values):
         if not any(str(term).strip() for term in (terms or [])):
             raise ValueError(f"{context} is missing required {label} terms")
 
 
 def _broad_and(groups, wrap):
-    """Search A: require every supplied concept tier; broaden within tiers."""
+    """Join supplied concept groups with AND and synonyms within each group."""
     gs = [g for g in groups if g]
     return " AND ".join(wrap(g) for g in gs)
 
 
-def build_wos(tiers, exclusions, warnings=None, broad=True):
+def build_wos(tiers, exclusions, warnings=None, broad=True, topical=False):
     """Web of Science 高级检索式（官方格式，Search A 默认宽泛）。
 
     官方语法要点（Clarivate / CASRAI 文档）：
       - 字段标识用 TS=（Topic=标题+摘要+作者关键词+Keywords Plus），多词短语必须加引号。
       - 布尔算符 AND/OR/NOT 必须全大写；同层同义词用 OR 并括号分组：TS=("a" OR "b")。
-      - broad（Search A）：TS=(领域层) AND TS=(必需技术锚点) AND TS=(应用层)。
+      - A0（broad=True）：TS=(对象召回词) AND TS=(必需技术锚点)，不加任务或排除。
+      - A1（topical=True）：对象、必需技术、任务三层共现，并应用排除项。
       - 排除用单个 NOT TS=(...) 把多个排除概念 OR 在一起，避免 (NOT A)(NOT B) 歧义。
       - 排除项必须是英文；非 ASCII（中文）描述无法被 WoS 匹配，需翻译或跳过。
     """
-    groups = _tier_groups(tiers)
     w = lambda g: f"TS=({g})"
-    if broad:
-        core = _broad_and(groups, w)
+    if broad and not topical:
+        t1, t2 = _recall_tiers(tiers)
+        core = _broad_and([_join_terms(t1), _join_terms(t2)], w)
+        return core
+    if topical:
+        core = _broad_and(_tier_groups(tiers), w)
     else:
         t1, t2, t3 = _search_tiers(tiers)
         core = (
@@ -191,11 +216,13 @@ def build_wos(tiers, exclusions, warnings=None, broad=True):
     return core + ex_clause
 
 
-def build_scopus(tiers, exclusions, warnings=None, broad=True):
-    groups = _tier_groups(tiers)
+def build_scopus(tiers, exclusions, warnings=None, broad=True, topical=False):
     w = lambda g: f"TITLE-ABS-KEY({g})"
-    if broad:
-        core = _broad_and(groups, w)
+    if broad and not topical:
+        t1, t2 = _recall_tiers(tiers)
+        return _broad_and([_join_terms(t1), _join_terms(t2)], w)
+    if topical:
+        core = _broad_and(_tier_groups(tiers), w)
     else:
         t1, t2, t3 = _search_tiers(tiers)
         core = (
@@ -210,6 +237,16 @@ def build_scopus(tiers, exclusions, warnings=None, broad=True):
 
 IEEE_MAX_SEARCH_TERMS = 25
 IEEE_MAX_WILDCARDS = 10
+IEEE_RECALL_STOPWORDS = {
+    "and", "for", "from", "into", "with", "without", "using", "based",
+    "related", "method", "methods", "system", "systems", "product", "products",
+}
+IEEE_TASK_MODIFIERS = {
+    "assessment", "evaluation", "detection", "determination", "estimation",
+    "classification", "content", "analysis", "identification", "measurement",
+    "monitoring", "application", "applications", "nutritional", "commercial",
+    "commodity", "specification", "size",
+}
 
 
 def _ieee_clean_terms(terms):
@@ -230,6 +267,75 @@ def _ieee_tiers(tiers):
         _ieee_clean_terms(t1),
         _ieee_clean_terms(t2),
         _ieee_clean_terms(t3),
+    )
+
+
+def _ieee_task_recall_terms(terms, explicit_anchors=None):
+    """Keep task phrases and add only their meaningful leading concept word."""
+    values = _ieee_clean_terms(list(terms or []) + list(explicit_anchors or []))
+    expanded = list(values)
+    seen = {value.casefold() for value in expanded}
+    for value in terms or []:
+        plain = value.strip('"')
+        tokens = re.findall(r"[A-Za-z][A-Za-z0-9-]{2,}", plain)
+        if not tokens:
+            continue
+        token = tokens[0]
+        normalized = token.casefold()
+        if normalized in IEEE_RECALL_STOPWORDS \
+                or normalized in IEEE_TASK_MODIFIERS \
+                or normalized in seen:
+            continue
+        expanded.append(token)
+        seen.add(normalized)
+    return expanded
+
+
+def _ieee_object_recall_terms(terms, explicit_anchors=None):
+    """Add repeated head nouns while avoiding isolated modifiers.
+
+    For example, ``aquaculture fish``, ``farmed fish`` and ``fish fillet``
+    contribute ``fish``; isolated words such as ``farmed`` and ``cultured`` do
+    not become standalone search terms. Callers can supply explicit anchors for
+    domain words that occur only once.
+    """
+    values = _ieee_clean_terms(list(terms or []) + list(explicit_anchors or []))
+    counts = {}
+    spelling = {}
+    for value in terms or []:
+        for token in set(re.findall(r"[A-Za-z][A-Za-z0-9-]{2,}", str(value))):
+            normalized = token.casefold()
+            if normalized in IEEE_RECALL_STOPWORDS:
+                continue
+            counts[normalized] = counts.get(normalized, 0) + 1
+            spelling.setdefault(normalized, token)
+    expanded = list(values)
+    seen = {value.casefold() for value in expanded}
+    for normalized, count in counts.items():
+        if count >= 2 and normalized not in seen:
+            expanded.append(spelling[normalized])
+            seen.add(normalized)
+    return expanded
+
+
+def _ieee_recall_tiers(tiers):
+    """Return IEEE-specific recall tiers with explicit/derived broad anchors."""
+    t1, t2, t3 = _ieee_tiers(tiers)
+    object_anchors = (
+        tiers.get("tier1_recall_anchor")
+        or tiers.get("tier1_broad_anchor")
+        or tiers.get("ieee_object_anchor_terms")
+        or []
+    )
+    task_anchors = (
+        tiers.get("tier3_recall_anchor")
+        or tiers.get("ieee_task_anchor_terms")
+        or []
+    )
+    return (
+        _ieee_object_recall_terms(t1, object_anchors),
+        t2,
+        _ieee_task_recall_terms(t3, task_anchors),
     )
 
 
@@ -335,9 +441,19 @@ def _ieee_core_queries(tiers, exclusions, warnings=None, field=None):
 
 
 def build_ieee(tiers, exclusions, warnings=None, broad=True):
-    """Generate one complete IEEE query; validate official clause constraints."""
+    """Generate the IEEE baseline or title-focused query.
+
+    IEEE is a technical-method supplement. Its recall baseline therefore uses
+    object + required technology; the task tier is added by the A1 topical
+    variant. The title-focused B query also uses object + technology so relevant
+    titles are not lost merely because the downstream quality task is implicit.
+    """
+    t1, t2, _ = _ieee_recall_tiers(tiers)
     field = None if broad else "Document Title"
-    queries = _ieee_core_queries(tiers, exclusions, warnings, field)
+    effective_exclusions = [] if broad else exclusions
+    queries = _ieee_split_queries(
+        [(t1, field), (t2, field)], effective_exclusions, warnings
+    )
     return queries[0] if queries else ""
 
 
@@ -350,7 +466,7 @@ def _ieee_add_variants(rows, code, label, queries):
 
 
 def _ieee_proximity_queries(tiers, exclusions):
-    t1, t2, t3 = _ieee_tiers(tiers)
+    t1, t2, t3 = _ieee_recall_tiers(tiers)
     if not t2 or not t3:
         return []
 
@@ -366,10 +482,25 @@ def _ieee_proximity_queries(tiers, exclusions):
 
 def _ieee_variants(scope, tiers, exclusions, warnings):
     rows = []
-    broad = _ieee_core_queries(tiers, exclusions, warnings, field=None)
-    precise = _ieee_core_queries(tiers, exclusions, None, field="Document Title")
-    _ieee_add_variants(rows, "broad", "IEEE A·宽泛检索（All Metadata）", broad)
-    _ieee_add_variants(rows, "precise", "IEEE B·标题高精度检索", precise)
+    t1, t2, t3 = _ieee_recall_tiers(tiers)
+    baseline = _ieee_split_queries(
+        [(t1, None), (t2, None)], [], warnings
+    )
+    topical = _ieee_split_queries(
+        [(t1, None), (t2, None), (t3, None)], exclusions, None
+    )
+    precise = _ieee_split_queries(
+        [(t1, "Document Title"), (t2, "Document Title")], exclusions, None
+    )
+    _ieee_add_variants(
+        rows, "broad", "IEEE A0·召回基线（对象+技术，All Metadata）", baseline
+    )
+    _ieee_add_variants(
+        rows, "topical", "IEEE A1·主题检索（对象+技术+任务，All Metadata）", topical
+    )
+    _ieee_add_variants(
+        rows, "precise", "IEEE B·标题核心检索（对象+技术）", precise
+    )
 
     publication_titles = (
         scope.get("ieee_publication_titles")
@@ -379,7 +510,6 @@ def _ieee_variants(scope, tiers, exclusions, warnings):
     )
     if isinstance(publication_titles, str):
         publication_titles = [publication_titles]
-    t1, t2, _ = _ieee_tiers(tiers)
     if publication_titles:
         conference = _ieee_split_queries(
             [(t1, None), (t2, None), (publication_titles, "Publication Title")],
@@ -447,47 +577,98 @@ def _gs_group_chunks(raw_terms, max_len):
     return chunks
 
 
-def _gs_search_a_queries(tiers):
-    """Return complementary Search A queries without silently dropping terms."""
+def _gs_layered_queries(tiers, include_task=False):
+    """Build at most six complementary queries without a Cartesian product."""
     t1, t2, t3 = _search_tiers(tiers)
+    recall_t1, recall_t2 = _recall_tiers(tiers)
+    raw_groups = [recall_t1, recall_t2]
+    budgets = [105, 140]
+    if include_task:
+        raw_groups = [t1, t2, t3]
+        budgets = [75, 80, 95]
     group_sets = [
-        _gs_group_chunks(t1, 75),
-        _gs_group_chunks(t2, 90),
-        _gs_group_chunks(t3, 87),
+        _gs_group_chunks(terms, budget)
+        for terms, budget in zip(raw_groups, budgets)
     ]
     active = [groups for groups in group_sets if groups]
     if not active:
         return []
-    queries = [""]
-    for groups in active:
-        queries = [" ".join(p for p in (base, group) if p)
-                   for base in queries for group in groups]
+    total = max(len(groups) for groups in active)
+    if total > 6:
+        raise ValueError(
+            "Google Scholar requires more than 6 complementary queries; "
+            "consolidate low-value synonyms in the scope"
+        )
+    queries = [
+        " ".join(groups[index % len(groups)] for groups in active)
+        for index in range(total)
+    ]
     if any(len(query) > 256 for query in queries):
         raise ValueError("internal error: Google Scholar query exceeds 256 characters")
     return list(dict.fromkeys(queries))
 
 
+def _gs_search_a_queries(tiers):
+    """Return A0 object+technology recall queries."""
+    return _gs_layered_queries(tiers, include_task=False)
+
+
+def _gs_with_exclusions(query, exclusions):
+    """Append the complete Scholar exclusion set only when it fits safely."""
+    suffix = " ".join(f"-{_gs_term(term)}" for term in exclusions if str(term).strip())
+    candidate = f"{query} {suffix}".strip() if suffix else query
+    return candidate if len(candidate) <= 256 else None
+
+
 def _gs_variants(tiers, exclusions, warnings):
-    """Generate complementary, anchor-preserving Google Scholar queries."""
-    queries = _gs_search_a_queries(tiers)
-    total = len(queries)
+    """Generate Google Scholar A0/A1/B variants within the 256-char limit."""
     rows = []
-    for index, query in enumerate(queries, 1):
-        suffix = f"_{index}" if total > 1 else ""
-        label = f"宽泛互补检索 {index}/{total}" if total > 1 else "宽泛检索"
+    a0_queries = _gs_search_a_queries(tiers)
+    for index, query in enumerate(a0_queries, 1):
+        suffix = f"_{index}" if len(a0_queries) > 1 else ""
+        label = f"Google Scholar A0·召回基线（对象+技术） {index}/{len(a0_queries)}"
         rows.append({"variant": f"broad{suffix}", "label": label, "query": query})
-    if queries:
+
+    a1_queries = _gs_layered_queries(tiers, include_task=True)
+    exclusions_omitted = False
+    for index, query in enumerate(a1_queries, 1):
+        filtered = _gs_with_exclusions(query, exclusions)
+        if filtered is None:
+            filtered = query
+            exclusions_omitted = True
+        suffix = f"_{index}" if len(a1_queries) > 1 else ""
+        rows.append({
+            "variant": f"topical{suffix}",
+            "label": f"Google Scholar A1·主题检索（对象+技术+任务） {index}/{len(a1_queries)}",
+            "query": filtered,
+        })
+
+    if a1_queries:
+        t1, _, _ = _search_tiers(tiers)
+        title_anchor = _gs_term(t1[0]) if t1 else ""
+        candidate = f"intitle:{title_anchor} {a1_queries[0]}" if title_anchor else a1_queries[0]
+        filtered = _gs_with_exclusions(candidate, exclusions)
+        if filtered is not None:
+            candidate = filtered
+        elif exclusions:
+            exclusions_omitted = True
+        if len(candidate) <= 256:
+            rows.append({
+                "variant": "precise",
+                "label": "Google Scholar B·标题对象核心检索",
+                "query": candidate,
+            })
         for kind in ("review", "survey"):
-            candidate = f"{queries[0]} intitle:{kind}"
+            candidate = f"{a1_queries[0]} intitle:{kind}"
             if len(candidate) <= 256:
                 rows.append({
                     "variant": f"review_{kind}",
                     "label": f"综述导向（标题含 {kind}）",
                     "query": candidate,
                 })
-    if exclusions and warnings is not None:
+    if exclusions_omitted and warnings is not None:
         warnings.append(("google_scholar",
-                         ["exclusions omitted to preserve all three core concepts"]))
+                         ["A0 omits exclusions by design; A1/B exclusion set exceeded 256 characters and was omitted"]))
     return rows
 
 
@@ -520,19 +701,27 @@ def build_google_scholar(tiers, exclusions, warnings=None, broad=True):
         app_grp = _gs_or_group(app_terms, budget3) if budget3 > 0 else ""
         base = " ".join(p for p in (domain_grp, tech_grp, app_grp) if p)
     q = base
-    # Scholar 256 上限：排除串过长，省略排除（用户可在 UI 过滤；已提示）
-    if exclusions and warnings is not None:
-        warnings.append(("google_scholar",
-                         ["exclusions omitted to preserve all three core concepts"]))
+    if not broad and exclusions:
+        filtered = _gs_with_exclusions(q, exclusions)
+        if filtered is not None:
+            q = filtered
+        elif warnings is not None:
+            warnings.append(("google_scholar",
+                             ["A1/B exclusion set exceeded 256 characters and was omitted"]))
     return q
 
 
-def build_cnki(tiers, exclusions, warnings=None, broad=True):
+def build_cnki(tiers, exclusions, warnings=None, broad=True, topical=False):
     def field_or(field, terms):
         joined = " OR ".join(f"{field}='{str(t).strip()}'" for t in terms)
         return f"({joined})" if len(terms) > 1 else joined
     t1, t2, t3 = _search_tiers(tiers)
-    if broad:
+    if broad and not topical:
+        t1, t2 = _recall_tiers(tiers)
+        g1 = field_or("SU", t1)
+        g2 = field_or("SU", t2)
+        return " AND ".join(g for g in (g1, g2) if g)
+    if topical:
         g1 = field_or("SU", t1)
         g2 = field_or("SU", t2)
         g3 = field_or("SU", t3)
@@ -548,7 +737,7 @@ def build_cnki(tiers, exclusions, warnings=None, broad=True):
     return core
 
 
-def build_wanfang(tiers, exclusions, warnings=None, broad=True):
+def build_wanfang(tiers, exclusions, warnings=None, broad=True, topical=False):
     def wf_term(term, precise=False):
         value = str(term).strip()
         return f'"{value}"' if precise or re.search(r"\s|[()]", value) else value
@@ -559,6 +748,13 @@ def build_wanfang(tiers, exclusions, warnings=None, broad=True):
         return f"({joined})" if len(values) > 1 else joined
 
     t1, t2, t3 = _search_tiers(tiers)
+    if broad and not topical:
+        t1, t2 = _recall_tiers(tiers)
+        groups = [wf_or(t1), wf_or(t2)]
+        core = " AND ".join(g for g in groups if g)
+        if len(core) > 800:
+            raise ValueError("Wanfang Professional Search expression exceeds 800 characters")
+        return core
     g1 = wf_or(t1, precise=not broad)
     g2 = wf_or(t2, precise=not broad)
     g3 = wf_or(t3, precise=not broad)
@@ -606,9 +802,9 @@ def generate(scope, platforms=None, warnings=None):
     exclusions = scope.get("explicit_exclusions", [])
     zh_tiers = scope.get("keyword_tiers_zh") or tiers
     zh_exclusions = scope.get("explicit_exclusions_zh") or exclusions
-    _validate_required_tiers(tiers)
+    _validate_required_tiers(tiers, require_task=False)
     if scope.get("keyword_tiers_zh"):
-        _validate_required_tiers(zh_tiers, "keyword_tiers_zh")
+        _validate_required_tiers(zh_tiers, "keyword_tiers_zh", require_task=False)
     if platforms is None:
         platforms = list(BUILDERS.keys())
     out = {}
@@ -621,11 +817,6 @@ def generate(scope, platforms=None, warnings=None):
                 warnings.append((p, ["keyword_tiers_zh missing; using primary-language tiers"]))
             if p == "google_scholar":
                 out[p] = _gs_search_a_queries(platform_tiers)
-                if platform_exclusions and warnings is not None:
-                    warnings.append((
-                        "google_scholar",
-                        ["exclusions omitted to preserve all three core concepts"],
-                    ))
             else:
                 out[p] = BUILDERS[p](platform_tiers, platform_exclusions, warnings)
     return out
@@ -645,7 +836,7 @@ _REVIEW_SUFFIX = {
 
 def _build_review_query(platform, builder, tiers, exclusions, suffix):
     """Place review criteria before the platform's final exclusion clause."""
-    query = builder(tiers, [], None) + suffix
+    query = builder(tiers, [], None, topical=True) + suffix
     if not exclusions:
         return query
     if platform == "wos":
@@ -669,11 +860,10 @@ def generate_variants(scope, platforms=None, warnings=None):
     """生成平台专属检索式组合；IEEE 按官方 search-clause 上限校验。
 
     返回结构：{platform: [ {"variant","label","query"}, ... ]}
-      - broad      : 宽泛检索（高召回）—— 领域层 AND 必需技术锚点 AND 应用层
-      - precise    : 精准检索（高精确）—— 三层全 AND（broad=False）
-      - angle_tech : 多角度·技术视角 —— 仅 领域层 + 技术层
-      - angle_app  : 多角度·应用视角 —— 仅 领域层 + 应用层
-      - review     : 多角度·综述导向 —— 宽泛式 + 各库 review/survey 限定
+      - broad      : A0 召回基线——对象召回词 AND 必需技术锚点，不加任务/排除
+      - topical    : A1 主题检索——对象 AND 必需技术锚点 AND 任务，可加排除
+      - precise    : B 精准检索——平台专属字段/邻近规则收紧
+      - review     : 综述导向——A1 主题式 + 各库 review/survey 限定
     多角度组合共同覆盖综述所需参考文献范围；用户自行粘贴执行并下载 PDF。
     """
     tiers = scope.get("keyword_tiers", {})
@@ -691,47 +881,34 @@ def generate_variants(scope, platforms=None, warnings=None):
             continue
         platform_tiers = zh_tiers if p in {"cnki", "wanfang"} else tiers
         platform_exclusions = zh_exclusions if p in {"cnki", "wanfang"} else exclusions
-        pt1 = _tier(platform_tiers, "tier1_species_object", "tier1")
-        pt2 = _tier(platform_tiers, "tier2_technology_method", "tier2")
-        pt3 = _tier(platform_tiers, "tier3_application_task", "tier3")
         if p == "ieee":
             out[p] = _ieee_variants(scope, platform_tiers, platform_exclusions, warnings)
             continue
-        # Google Scholar 用互补列表覆盖全部任务词，每条保留三类核心概念。
+        # Google Scholar 分别生成 A0 两层和 A1 三层互补短查询。
         if p == "google_scholar":
             out[p] = _gs_variants(platform_tiers, platform_exclusions, warnings)
             continue
         b = BUILDERS[p]
         variants = []
-        # 1) 宽泛（高召回）—— 收集排除项告警
+        # 1) A0 召回基线：不加任务和排除项。
         variants.append({
             "variant": "broad",
-            "label": "宽泛检索（高召回）",
-            "query": b(platform_tiers, platform_exclusions, warnings),
+            "label": "A0·召回基线（对象+必需技术，不加排除）",
+            "query": b(platform_tiers, [], warnings),
         })
-        # 2) 精准（三层全 AND）
+        # 2) A1 主题检索：三层共现，排除项从这一层开始应用。
+        variants.append({
+            "variant": "topical",
+            "label": "A1·主题检索（对象+必需技术+任务）",
+            "query": b(platform_tiers, platform_exclusions, None, topical=True),
+        })
+        # 3) B 平台专属精准检索。
         variants.append({
             "variant": "precise",
-            "label": "精准检索（高精确）",
+            "label": "B·精准检索（平台专属收紧）",
             "query": b(platform_tiers, platform_exclusions, None, broad=False),
         })
-        # 3) 技术视角（领域 + 技术）
-        if pt2:
-            sub = {"tier1_species_object": pt1, "tier2_technology_method": pt2}
-            variants.append({
-                "variant": "angle_tech",
-                "label": "多角度·技术视角（领域+技术）",
-                "query": b(sub, platform_exclusions, None),
-            })
-        # 4) 应用视角（领域 + 应用）
-        if pt3:
-            sub = {"tier1_species_object": pt1, "tier3_application_task": pt3}
-            variants.append({
-                "variant": "angle_app",
-                "label": "多角度·应用视角（领域+应用）",
-                "query": b(sub, platform_exclusions, None),
-            })
-        # 5) 综述导向（宽泛式 + review 限定）
+        # 4) 综述导向（A1 主题式 + review 限定）
         rs = _REVIEW_SUFFIX.get(p, "")
         if rs:
             rev_q = _build_review_query(

@@ -220,7 +220,7 @@ Present the following dimensions one at a time. **Before each item, output 话�
 
 3. **Writing Type (Mandatory)**
    - Options: `综述` / `研究论著/实验研究` / `学位论文` / `开题报告` / `基金申请` / `调研报告` / `自定义`
-   - Impact（A5 逐字）: 这决定下游检索策略的**查全/查准/新颖性权重**与检索式版本偏好——综述偏好宽式检索 A（查全），研究论著偏好精准式检索 B（查准），开题报告/基金申请侧重近 2 年新颖性。这是本工具的核心差异化。Determines the recall/precision/novelty weighting and query-version preference for the downstream search strategy — review favors broad query A (recall), research paper favors precise query B (precision), proposal/grant favors recent-2-year novelty.
+   - Impact（A5 逐字）: 这决定下游检索策略的**查全/查准/新颖性权重**与检索式版本偏好——综述先用 A0 查漏并以 A1 为主题主检索，研究论著偏好精准式 B（查准），开题报告/基金申请侧重近 2 年新颖性。这是本工具的核心差异化。Determines the downstream recall/precision/novelty weighting and query preference: reviews use A0 for recall auditing and A1 as the topical search, research papers favor precise B, and proposals/grants emphasize the latest two years.
 
 4. **Target Journal Tier (Optional but strongly recommended)**
    - Options: `Top SCI Journals (Q1)` / `Mainstream SCI Journals (Q2–Q3)` / `Specialized Field Journals` / `No specific target; write first, submit later`

@@ -1,13 +1,13 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：4.7.0（以根目录 VERSION 为准）
+版本：4.9.0（以根目录 VERSION 为准）
 
 ## 快速开始
 
 1. **入口**：对任意支持 Skill 的 Agent 说「**开始文献检索**」或「**Start QueryStrategist**」。
 2. **Step 0**：Setup Wizard 配置写作类型（综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义）+ 目标语言 + 目标期刊 + 时间跨度 + 中文补充（G0 确认）。
 3. **Step 1**：Scope Definer 通过结构化提问收敛为三级关键词体系（对象层 + 必需技术锚点/支持方法 + 任务层）+ 中英文排除项 + 优先级（G1 确认）。
-4. **Step 2**：Search Strategist V1 双通道 —— Search A（Query Crafter 生成 6 平台检索式，每库查全式 A + 查准式 B；IEEE 另含 C/D1/D2/E 变体）+ Search B（Literature Harvester 使用对象/技术/任务三层过滤收割候选清单）→ 交付**检索策略包**。默认打开 `index.html`；检索式页面支持平台标签页和复制，候选清单支持搜索、筛选、排序。每份 Markdown 同步生成离线 HTML，CSV/Markdown 使用 UTF-8 BOM。检索策略包全部继承 Step 0–2 的上游选择与门控记录，模板见 `search_strategist_v1/assets/search_strategy_pack_template.md`（G2 确认）。
+4. **Step 2**：Search Strategist V1 双通道 —— Search A（六库统一输出 A0 对象+技术召回基线、A1 三层主题式、B 平台专属精准式；IEEE 另有 C/D1/D2/E）+ Search B（联网前说明将访问 OpenAlex/Crossref 并请求一次授权，再使用三层过滤收割候选清单）→ 交付**检索策略包**。A0 不加任务、排除、年份或文献类型；拒绝联网授权时只跳过 Search B，Search A 正常交付。默认打开 `index.html`。
 
 ## 目录清单
 
@@ -37,7 +37,7 @@ QueryStrategist/
 
 | Skill | 脚本 | 用途 |
 |:--|:--|:--|
-| `literature_harvester` | `harvest.py` | 两源 API 收割 + Crossref 逐条验证（去幻觉；含配额守卫） |
+| `literature_harvester` | `harvest.py` | 两源 API 收割 + Crossref 逐条验证（去幻觉；含联网授权与配额守卫） |
 | `query_crafter` | `query_generator.py` | 多平台检索式批量生成 |
 | `_shared_tools` | `ensure_tool.py` | 开源工具检测/隔离安装（清华镜像直连） |
 | `_shared_tools` | `validate_skills.py` | 套件自校验（frontmatter 合规检查；路径自动推导，可在发布包内直接运行） |

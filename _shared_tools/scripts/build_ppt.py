@@ -165,7 +165,7 @@ bullets(s, [
     ("全局 Pipeline Context 跨步继承，避免重复劳动、保持上下文连续", 0),
     ("3 个决策门（G0–G2）强制人工确认，AI 不越权做价值判断", 0),
     ("双通道检索", 0, TEAL),
-    ("Search A：手工检索式（6 大库：WoS / Scopus / IEEE / Google Scholar / CNKI / 万方，每库查全式 A + 查准式 B）", 1),
+    ("Search A：手工检索式（6 大库统一生成 A0 召回基线 + A1 主题检索 + B 精准检索）", 1),
     ("Search B：API 自动收割（OpenAlex 收割 + Crossref 按 DOI 验证）", 1),
     ("按写作类型调策略权重：综述查全 / 论著查准 / 开题基金新颖性", 0, ACCENT),
 ])
@@ -209,7 +209,7 @@ placeholder(s, 0.55, 4.55, 12.2, 1.7, "终点交付：检索策略包四件套�
 # ============ SLIDE 5 — Core capabilities (scripted) ============
 s = content_slide("核心能力：已实装可运行脚本", "超越纯提示词——关键机械化环节已封装为 Python，开箱即用")
 bullets(s, [
-    ("检索式生成  query_generator.py（零依赖）— 6 大库高级检索式一键产出（broad / precise / angle_tech / angle_app / review）", 0),
+    ("检索式生成  query_generator.py（零依赖）— 6 大库一键产出 A0 召回、A1 主题、B 精准检索式", 0),
     ("文献收割  harvest.py — OpenAlex / Crossref，含配额守卫（预算 / 429 熔断 / 缓存 / dry-run）", 0),
     ("工具安装  ensure_tool.py — 开源工具检测/隔离安装（镜像直连，绕过 venv 回滚）", 0),
     ("策略包模板  search_strategy_pack_template.md — 范围卡 / 检索式合集 / 候选清单 / 使用说明标准结构", 0, ACCENT),

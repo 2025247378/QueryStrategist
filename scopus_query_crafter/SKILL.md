@@ -1,10 +1,10 @@
 ---
 name: scopus_query_crafter
-description: "Scopus检索式构建器 | 三层关键词→Scopus Advanced Search 语法（字段代码 TITLE-ABS-KEY/TITLE/ABS/KEY/SRCTITLE/PUBYEAR/DOCTYPE 等 + 布尔 AND/OR/AND NOT + 位置算符 W/n/PRE/n + 精确短语双引号/花括号 + 截词 * ?），产出宽泛查全A+高精度查准B+组合C三套检索式。QueryStrategist — Search Strategist 子模块。 Pure LLM-agent skill; no external MCP server required."
+description: "Scopus检索式构建器 | 将三级关键词转化为 Scopus Advanced Search 语法，生成 A0 对象+技术召回基线、A1 三层主题检索和 B TITLE/W-n 精准检索，支持字段代码、布尔和位置算符。QueryStrategist Search A 子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.3
+  version: 1.4
   keywords: [Scopus, search query, bibliographic, QueryStrategist]
   triggers: [Scopus, 检索式, 高级检索]
 ---
@@ -20,9 +20,10 @@ metadata:
 # Scopus Query Crafter
 
 ## 版本
-V1.3
+V1.4
 
 ## 变更记录
+- **V1.4 (2026-08-12)**：改为 A0/A1/B 分层：A0 仅对象+必需技术且不加 `AND NOT`；A1 加入任务与排除；B 使用 `TITLE` 和 `W/5` 收紧。
 - **V1.3 (2026-08-11)**：按 Elsevier Scopus Support Center 当前规则统一 Search A 为 `TITLE-ABS-KEY(对象) AND TITLE-ABS-KEY(必需技术锚点) AND TITLE-ABS-KEY(任务)`；保留 `AND NOT` 末尾规则；删除“省略字段代码即默认全部字段”的未获当前官方 Advanced Search 文档支持的口径。
 
 ## 所属系统
@@ -92,7 +93,7 @@ Scopus (www.scopus.com)
 - 确定词序固定时用 `PRE/n`，噪音更少。
 - 要求两词紧挨出现时用 `W/0` 或 `PRE/0`。
 - ⚠️ **不可在同表达式内混用不同类型或不同 n 值的邻近算符**：如 `bay PRE/6 ship* PRE/0 channel` 无效；同类同 n 可序列使用。
-- `W/n` 与 `PRE/n` 只能连接 term 或 phrase，不能让参与的 proximity expression 含 `AND` 或 `AND NOT`。Search A 使用稳定的显式 `TITLE-ABS-KEY` 字段；邻近检索作为补充精确式，不替代三概念基线式。
+- `W/n` 与 `PRE/n` 只能连接 term 或 phrase，不能让参与的 proximity expression 含 `AND` 或 `AND NOT`。A0/A1 使用显式 `TITLE-ABS-KEY` 字段；邻近检索用于 B 精准式。
 
 ### 精确短语匹配
 - **宽松/近似短语**：用**一对直双引号**包裹：`"computer vision"`（注意是一对 `"..."`，不是两对 `""..."`）。
@@ -123,9 +124,14 @@ Scopus (www.scopus.com)
 
 ### 2. 可直接使用的 Scopus 高级检索式
 
-**检索式 A：宽泛查全检索（用于最大范围覆盖）**
+**检索式 A0：召回基线（对象+必需技术）**
 `
-TITLE-ABS-KEY((autonomous vehicle OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND ("computer vision" OR "machine vision" OR "deep learning" OR CNN OR "neural network") AND ("lane detection" OR "pedestrian detection" OR "trajectory prediction" OR "semantic segmentation")) AND PUBYEAR AFT 2019
+TITLE-ABS-KEY(autonomous vehicle OR "self-driving car" OR "connected vehicle") AND TITLE-ABS-KEY("computer vision" OR "machine vision")
+`
+
+**检索式 A1：主题检索（三层共现）**
+`
+TITLE-ABS-KEY(autonomous vehicle OR "self-driving car") AND TITLE-ABS-KEY("computer vision" OR "machine vision") AND TITLE-ABS-KEY("lane detection" OR "trajectory prediction") AND NOT TITLE-ABS-KEY("camera failure")
 `
 
 **检索式 B：高精度查准检索（用于锁定核心文献）**
@@ -148,7 +154,7 @@ TITLE-ABS-KEY(("autonomous vehicle" OR "self-driving car") AND ("computer vision
 - 若结果过多，可逐步加回 `TITLE-ABS-KEY(...)` 包裹、`AND PUBYEAR AFT 2019`、`AND DOCTYPE(re)` 收口。
 
 ### 3. 检索策略与使用建议
-- **第一步**：先使用检索式 A，按"相关度"排序快速了解领域概况。
+- **第一步**：先使用检索式 A0 查漏，再用 A1 作为主题主检索，按"相关度"排序。
 - **第二步**：根据结果数量调整。如果结果过多（>1000 条），增加 `AND` 条件或限定 `TITLE` 字段；如果结果过少（<50 条），扩展同义词或放宽字段限制。
 - **第三步**：使用检索式 B，按"被引频次"排序，锁定高影响力核心文献。
 - **第四步**：利用"检索历史"中的组合检索功能，将多个检索式的结果进行交集、并集操作。

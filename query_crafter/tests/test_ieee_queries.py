@@ -38,18 +38,22 @@ def aquaculture_scope():
 
 
 class IEEEQueryTests(unittest.TestCase):
-    def test_broad_query_uses_all_metadata_and_canonical_not(self):
+    def test_broad_query_uses_ieee_recall_baseline_without_exclusions(self):
         scope = aquaculture_scope()
         query = QUERY_GENERATOR.build_ieee(
             scope["keyword_tiers"], scope["explicit_exclusions"]
         )
         self.assertNotIn('"Abstract":', query)
-        self.assertNotIn(" AND NOT ", query)
-        self.assertIn(" NOT (", query)
-        for tier_terms in scope["keyword_tiers"].values():
+        self.assertNotIn(" NOT ", query)
+        for tier_terms in (
+            scope["keyword_tiers"]["tier1_species_object"],
+            scope["keyword_tiers"]["tier2_technology_method"],
+        ):
             for term in tier_terms:
                 expected = f'"{term}"' if " " in term else term
                 self.assertIn(expected, query)
+        self.assertNotIn('"quality assessment"', query)
+        self.assertRegex(query, r"\b(fish)\b")
 
     def test_title_field_is_repeated_for_each_or_value(self):
         tiers = {
@@ -61,6 +65,7 @@ class IEEEQueryTests(unittest.TestCase):
         self.assertIn('"Document Title":fish', query)
         self.assertIn('"Document Title":"farmed fish"', query)
         self.assertNotRegex(query, r'"Document Title"\s*:\s*\(')
+        self.assertNotIn('"Document Title":freshness', query)
 
     def test_all_variants_follow_syntax_and_clause_limit(self):
         variants = QUERY_GENERATOR.generate_variants(
@@ -81,21 +86,54 @@ class IEEEQueryTests(unittest.TestCase):
         variants = QUERY_GENERATOR.generate_variants(scope, ["ieee"])["ieee"]
         broad = [row for row in variants if row["variant"] == "broad"]
         self.assertEqual(len(broad), 1)
-        self.assertGreater(broad[0]["query"].count(" OR "), 25)
+        topical = [row for row in variants if row["variant"] == "topical"]
+        self.assertEqual(len(topical), 1)
+        self.assertGreater(topical[0]["query"].count(" OR "), 25)
         self.assertLessEqual(
-            QUERY_GENERATOR._ieee_query_term_count(broad[0]["query"]),
+            QUERY_GENERATOR._ieee_query_term_count(topical[0]["query"]),
             QUERY_GENERATOR.IEEE_MAX_SEARCH_TERMS,
         )
 
     def test_split_variants_preserve_all_application_terms(self):
         scope = aquaculture_scope()
         variants = QUERY_GENERATOR.generate_variants(scope, ["ieee"])["ieee"]
-        broad_text = "\n".join(
-            row["query"] for row in variants if row["variant"].startswith("broad")
+        topical_text = "\n".join(
+            row["query"] for row in variants if row["variant"].startswith("topical")
         )
         for term in scope["keyword_tiers"]["tier3_application_task"]:
             expected = f'"{term}"' if " " in term else term
-            self.assertIn(expected, broad_text)
+            self.assertIn(expected, topical_text)
+
+    def test_compound_fish_scope_adds_generic_recall_anchors(self):
+        scope = {
+            "keyword_tiers": {
+                "tier1_species_object": [
+                    "aquaculture fish", "farmed fish", "cultured fish",
+                    "fish fillet", "fish muscle", "aquatic products",
+                ],
+                "tier2_technology_method": [
+                    "spectral imaging", "hyperspectral imaging", "multispectral imaging",
+                ],
+                "tier3_application_task": [
+                    "quality assessment", "freshness detection", "weight estimation",
+                ],
+            },
+            "explicit_exclusions": ["water quality monitoring"],
+        }
+        variants = QUERY_GENERATOR.generate_variants(scope, ["ieee"])["ieee"]
+        baseline = next(row["query"] for row in variants if row["variant"] == "broad")
+        topical = next(row["query"] for row in variants if row["variant"] == "topical")
+        precise = next(row["query"] for row in variants if row["variant"] == "precise")
+        self.assertRegex(baseline, r' OR fish\)')
+        self.assertNotIn('"quality assessment"', baseline)
+        self.assertIn('"quality assessment"', topical)
+        self.assertIn(" OR quality OR freshness", topical)
+        self.assertNotRegex(
+            topical,
+            r" OR (assessment|content|estimation|composition)(?: OR|\))",
+        )
+        self.assertIn('"Document Title":fish', precise)
+        self.assertNotIn('"Document Title":"quality assessment"', precise)
 
     def test_ieee_specific_proximity_and_optional_conference_variants(self):
         scope = aquaculture_scope()
@@ -130,7 +168,7 @@ class IEEEQueryTests(unittest.TestCase):
         )
         self.assertIn("(fish OR \"farmed fish\")", query)
         self.assertIn("(spectroscopy)", query)
-        self.assertIn("(freshness)", query)
+        self.assertNotIn("(freshness)", query)
 
     def test_wildcard_constraints_are_validated(self):
         with self.assertRaisesRegex(ValueError, "three preceding"):

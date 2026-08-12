@@ -23,7 +23,7 @@
 |---|---|---|
 | Step 0 Setup Wizard | `project_meta.json`（写作类型 / 目标语言 / 目标期刊 / 时间跨度 / 中文补充） | `scope_card.md` 的写作类型与策略权重；`query_pack.md` 的检索式语言；`candidate_list` 的语言筛选；`usage_guide.md` 的按类型建议 |
 | Step 1 Scope Definer | 三级关键词体系 + 排除项 + 优先级（`scope_definition.md`） | `scope_card.md` 的关键词与排除项；`query_pack.md` 的检索式构建依据 |
-| Step 2 Search Strategist V1 | Search A 检索式 + Search B 收割结果（`harvest_v1.json`） | `query_pack.md` 的检索式合集；`candidate_list` 的文献元数据 |
+| Step 2 Search Strategist V1 | Search A 检索式 + Search B 网络授权记录 + 收割结果（允许时为 `harvest_v1.json`；拒绝时为 `skipped_by_user`） | `query_pack.md` 的检索式合集；`scope_card.md` 的授权记录；`candidate_list` 的文献元数据或跳过状态 |
 | 门控决策记录 | G0–G2 用户确认内容 | `scope_card.md` 的「确认记录」；策略包一致性校验 |
 
 **5 条继承硬规则**：
@@ -45,6 +45,7 @@
 - [ ] 入口：`index.html` 可导航到四份内容页，页面无外部资源请求
 - [ ] 交互：检索式可复制；候选清单可搜索、筛选、排序；关闭 JavaScript 后内容仍完整
 - [ ] 保真：`query_pack.md` 与 `query_pack.html` 中检索式逐字一致
+- [ ] 授权：Search B 网络授权状态已记录；拒绝时未伪造空收割成功
 
 ---
 
@@ -75,6 +76,7 @@
 ## 确认记录
 - G0 配置确认：【时间/内容】
 - G1 范围确认：【时间/内容】
+- Search B 网络授权：【允许 / 拒绝；时间】（该操作授权不计入 G0–G2）
 ```
 
 ---
@@ -84,37 +86,43 @@
 ```
 # 多平台检索式合集
 
-> 每库给「查全式 A（高召回）+ 平台专属查准式 B（高精确）」双版本；IEEE 另保留 C（会议/出版物定向）、D1/D2（NEAR/ONEAR）和 E（综述导向）变体。
+> 六库统一给出 A0（对象+必需技术召回基线）、A1（对象+必需技术+任务主题式）和 B（平台专属精准式）。A0 不加任务、排除项、年份或文献类型；排除从 A1 开始应用。IEEE 另保留 C（会议/出版物定向）、D1/D2（NEAR/ONEAR）和 E（综述导向）变体。
 > 策略权重按写作类型调整（见 scope_card.md）。
 
 ## Web of Science
-- 查全式 A：【继承自 Step 2 Search A】
-- 查准式 B：【继承自 Step 2 Search A】
+- 召回基线 A0（对象+必需技术）：【继承自 Step 2 Search A】
+- 主题检索 A1（对象+必需技术+任务）：【继承自 Step 2 Search A】
+- 精准检索 B（标题+NEAR）：【继承自 Step 2 Search A】
 - 语法要点：
 
 ## Scopus
-- 查全式 A：
-- 查准式 B：
+- 召回基线 A0：
+- 主题检索 A1：
+- 精准检索 B：
 
 ## IEEE Xplore
-- 查全式 A：
-- 查准式 B：
+- 召回基线 A0（对象+技术，All Metadata）：
+- 主题检索 A1（对象+技术+任务，All Metadata）：
+- 标题核心检索 B（对象+技术）：
 - 会议/出版物定向 C（有真实目标名称时）：
 - 无序邻近 D1（NEAR）：
 - 有序邻近 D2（ONEAR）：
 - 综述导向 E：
 
 ## Google Scholar
-- 查全式 A：
-- 查准式 B：
+- 召回基线 A0（每行独立执行，最多 6 条）：
+- 主题检索 A1（每行独立执行，最多 6 条）：
+- 精准检索 B：
 
 ## CNKI（中文补充）
-- 查全式 A：
-- 查准式 B：
+- 召回基线 A0：
+- 主题检索 A1：
+- 精准检索 B：
 
 ## 万方（中文补充）
-- 查全式 A：
-- 查准式 B：
+- 召回基线 A0：
+- 主题检索 A1：
+- 精准检索 B：
 
 ## 可调参数
 - 时间跨度：【继承自 Step 0】
@@ -130,6 +138,7 @@
 
 > [注意] 候选清单、非最终语料。元数据可能含虚构/错位，需用户在平台核对后自行下载。
 > 来源：Search B API 收割（OpenAlex 主源）+ Crossref 按 DOI 逐条验证（title 相似度 >= 0.8 且年份差 <= 1），已验证条目去重。
+> Search B status：【completed / skipped_by_user】。若为 `skipped_by_user`，说明用户未授权外部 API 访问，本文件不生成虚假的零结果统计。
 
 ## 统计
 - 总数：【N】篇
@@ -159,18 +168,19 @@ title, authors, journal, year, doi, doi_link, oa_status, source
 - 万方：高级检索，进入跨库检索
 
 ## 预期命中量级
-- 查全式 A：约【N】篇（预估）
-- 查准式 B：约【N】篇（预估）
+- 召回基线 A0：约【N】篇（预估）
+- 主题检索 A1：约【N】篇（预估）
+- 精准检索 B：约【N】篇（预估）
 
 ## 调宽 / 调窄方法
 - 调宽（增加结果）：去排除项 / 用 OR 连接同义词 / 放宽时间窗
 - 调窄（减少结果）：加 AND / 用精确匹配双引号 / 缩小时间窗 / 限定字段
 
 ## 按写作类型的检索建议
-- 综述：优先用查全式 A，确保覆盖度
+- 综述：先运行 A0 查漏，再以 A1 为主题主检索，最后用 B 快速定位高相关文献
 - 研究论著：优先用查准式 B，聚焦核心方法
 - 开题/基金：查准式 B + 近 2 年过滤，关注高被引与空白
-- 学位论文/调研报告：查全式 A 起步，按结果量调窄
+- 学位论文/调研报告：从 A0 起步，按 A1、B 顺序调窄
 
 ## 候选清单使用
 - 顶部 OA 文献可免费下载；非 OA 需机构权限

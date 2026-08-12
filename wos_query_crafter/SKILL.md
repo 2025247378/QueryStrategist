@@ -1,10 +1,10 @@
 ---
 name: wos_query_crafter
-description: "WoS检索式构建器 | 将三层关键词转化为Web of Science高级检索语法（默认 TS=() 包裹显式主题字段检索；年份用结果页左侧 Publication Year 过滤器，不在式中写 PY=），产出广泛检索式A（高召回率）+ 精准检索式B（高精确率，NEAR/x 邻近共现），含截词、邻近算符 NEAR、字段标识优化。QueryStrategist — Search Strategist 子模块 Search A。 Use this skill for Web of Science advanced search query building tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
+description: "WoS检索式构建器 | 将三级关键词转化为 Web of Science 高级检索语法，生成 A0 对象+技术召回基线、A1 三层主题检索和 B 标题/NEAR 精准检索；年份使用结果页筛选器。QueryStrategist Search A 子模块。Use for Web of Science advanced search query building. Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.3
+  version: 1.4
   keywords: [Web of Science, search query, bibliographic, QueryStrategist]
   triggers: [WoS, web of science, 检索式]
 ---
@@ -23,9 +23,10 @@ metadata:
 **QueryStrategist** 工作流 — Search Strategist 的子模块（Search A）
 
 ## 版本
-V1.3
+V1.4
 
 ## 变更记录
+- **V1.4 (2026-08-12)**：改为 A0/A1/B 分层：A0 仅 `TS=(对象) AND TS=(必需技术)` 且不加排除；A1 再加入任务与排除；B 使用标题字段和 `NEAR/10` 收紧。
 - **V1.3 (2026-08-11)**：按 Web of Science 当前官方帮助中心修正 Search A 为三概念强制共现；单词默认不加引号以保留 lemmatization/stemming，多词固定短语才加引号；纠正 `SAME` 仅用于 Address 检索，Topic 精准共现改用 `NEAR/x`。
 
 ## 目标
@@ -117,8 +118,9 @@ WoS 中逻辑算符的优先级如下：
 
 ### Step 8：输出最终检索式
 向用户输出以下内容：
-1. **检索式 A：广泛检索（高召回率）** — 采用「**领域层 AND 必需技术锚点 AND 应用层**」结构；三类概念必须同时出现，各层内部同义词用 `OR` 扩展。若 Scope 提供 `tier2_required_anchor`，Search A 只把该组作为必需技术概念，机器学习等支持方法进入补充视角。
-2. **检索式 B：精准检索（高精确率）** — 三层继续强制命中，并可用 `NEAR/x` 收紧技术与任务的词距。不要在 Topic 检索中使用 Address 专用的 `SAME`。
+1. **检索式 A0：召回基线** — 采用「**对象层 AND 必需技术锚点**」，不强制任务层，不加排除项、年份或文献类型。
+2. **检索式 A1：主题检索** — 三层概念共现，从这一层开始应用经核对的排除项。
+3. **检索式 B：精准检索** — 用标题对象与 `NEAR/x` 收紧技术和任务词距。不要在 Topic 检索中使用 Address 专用的 `SAME`。
 3. **年份处理**：**不在检索式中写 `PY=`**，统一用结果页左侧 Publication Year 过滤器。
 4. **使用说明**：简要说明如何复制到 WoS 高级检索框、如何调整、如何排序结果。
 
@@ -129,14 +131,14 @@ WoS 中逻辑算符的优先级如下：
 
 ### 2. WoS 高级检索式
 
-**检索式 A（广泛检索 — 高召回率，宽口径）**
+**检索式 A0（召回基线 — 对象+必需技术）**
 `
-TS=([Tier1 领域层 OR 组合]) AND TS=([Tier2 必需技术锚点 OR 组合]) AND TS=([Tier3 应用层 OR 组合])
+TS=([Tier1 对象层 OR 组合]) AND TS=([Tier2 必需技术锚点 OR 组合])
 `
-*说明*：三类概念强制共现，同义词只在各层内部用 `OR` 放宽。年份不写 `PY=`（见 §3），排除项合并进单个 `NOT TS=(... OR ...)`。
+*说明*：A0 仅强制对象和必需技术共现；任务、排除、年份和文献类型均不进入 A0。
 *示例*（脚本化生成器 `broad=True` 默认产出；TS= 为规范形式）：
 `
-TS=("autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND TS=("computer vision" OR "machine vision" OR "deep learning" OR CNN OR "neural network") AND TS=("lane detection" OR "pedestrian detection" OR "trajectory prediction" OR "object tracking" OR "semantic segmentat*") NOT TS=(occlusion OR weather OR "camera failure")
+TS=("autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND TS=("computer vision" OR "machine vision")
 `
 
 **检索式 B（精准检索 — 高精确率）**
@@ -148,6 +150,11 @@ TS=([Tier1关键词OR组合]) AND TS=(([Tier2关键词OR组合]) NEAR/10 ([Tier3
 TS=("autonomous vehicle" OR "self-driving car") AND TS=(("computer vision" OR "deep learning") NEAR/10 ("trajectory prediction" OR "semantic segmentat*" OR "collision avoidance"))
 `
 
+**检索式 A1（主题检索 — 三层共现）**
+`
+TS=([Tier1 对象层 OR 组合]) AND TS=([Tier2 必需技术锚点 OR 组合]) AND TS=([Tier3 任务层 OR 组合]) NOT TS=([排除项 OR 组合])
+`
+
 ### 3. 可选限定
 - **年份筛选（重要）**：**绝不在主检索式中写 `PY=(年份)`**。年份统一用 WoS 结果页左侧的 **Publication Year（出版年）** 过滤器勾选，便于随时调整时间窗、避免污染检索式。
 - 如需排除特定主题：在检索式末尾添加 `NOT ("occlusion" OR "weather" OR "camera failure")`（裸布尔即可，无需 `TS=`）。
@@ -155,7 +162,7 @@ TS=("autonomous vehicle" OR "self-driving car") AND TS=(("computer vision" OR "d
 - 如需限定文献类型：在 WoS 检索结果页左侧 `Document Types` 勾选 `Review Article`。
 
 ### 4. 使用建议
-- 先使用**检索式 A** 进行首次检索，按 `Relevance` 排序快速浏览。
+- 先使用**检索式 A0** 查漏，再使用 A1 作为主题主检索，按 `Relevance` 排序快速浏览。
 - 如果结果过多（>500），使用**检索式 B** 缩小范围。
 - 使用 WoS 左侧 `Analyze Results` 工具，按 `Source Titles` 和 `Authors` 发现核心期刊和团队。
 - 找到一篇高相关文献后，使用 `Cited References` 回溯经典，使用 `Citation Network` 追踪前沿。
@@ -183,9 +190,14 @@ TS=("autonomous vehicle" OR "self-driving car") AND TS=(("computer vision" OR "d
 
 ### WoS 高级检索式
 
-**检索式 A（广泛检索 — 宽口径，高召回）**
+**检索式 A0（召回基线 — 对象+必需技术）**
 `
-TS=("ego vehicle" OR "autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND TS=("computer vision" OR "machine vision" OR "deep learning" OR CNN OR "neural network" OR "object detection" OR "image segmentation") AND TS=("lane detection" OR "pedestrian detection" OR "trajectory prediction" OR "object tracking" OR "semantic segmentat*" OR "anomaly detect*")
+TS=("ego vehicle" OR "autonomous vehicle" OR "self-driving car" OR "connected vehicle" OR "electric vehicle") AND TS=("computer vision" OR "machine vision")
+`
+
+**检索式 A1（主题检索）**
+`
+TS=("ego vehicle" OR "autonomous vehicle" OR "self-driving car") AND TS=("computer vision" OR "machine vision") AND TS=("lane detection" OR "trajectory prediction" OR "object tracking") NOT TS=("occlusion handling" OR "object classification")
 `
 
 **检索式 B（精准检索）**
@@ -194,7 +206,7 @@ TS=("autonomous vehicle" OR "self-driving car") AND TS=(("computer vision" OR "d
 `
 
 ### 使用建议
-1. 先用**检索式 A** 检索，按 `Relevance` 排序。
+1. 先用**检索式 A0** 查漏，再用 A1 主检索，按 `Relevance` 排序。
 2. 结果过多时，用**检索式 B** 缩小范围，或限定 `SO=` 核心期刊。
 3. 使用 `Analyze Results` 发现核心期刊和团队。
 4. 找到关键论文后，用 `Cited References` 和 `Citation Network` 扩展文献。

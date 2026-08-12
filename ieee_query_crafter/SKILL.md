@@ -1,10 +1,10 @@
 ---
 name: ieee_query_crafter
-description: "IEEE Xplore检索式构建器 | 三层关键词→IEEE Xplore【Advanced Search 中的 Command Search】语法（完整字段名 \"Document Title\":/\"Abstract\": 等为可选限定符、布尔 AND/OR/NOT、邻近 NEAR/ONEAR、短语、通配符 * ?、每个 search clause≤25 terms），产出宽泛查全A+高精度查准B+会议定向C+邻近检索D四套 Command Search 检索式。QueryStrategist子模块 Use this skill for IEEE Xplore (Advanced Search › Command Search) query building tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
+description: "IEEE Xplore检索式构建器 | 将三级关键词转化为 Advanced Search > Command Search 语法，生成 A0 对象+技术召回基线、A1 三层主题式、B 标题核心式及 C/D/E 变体，校验字段、NEAR/ONEAR、通配符和每个 search clause 25-term 限制。QueryStrategist Search A 子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.8
+  version: 2.0
   keywords: [IEEE Xplore, command search, search query, engineering, QueryStrategist]
   triggers: [IEEE, 检索式, 工程文献, IEEE Xplore, Command Search, command search]
 ---
@@ -23,9 +23,11 @@ metadata:
 This skill is part of the **QueryStrategist** workflow (Step 2). It is called by **Search Strategist V1** to generate platform-specific advanced search queries for IEEE Xplore. The queries are used by the user for manual retrieval of high-quality literature, primarily in computer science, electrical engineering, and related interdisciplinary fields.
 
 ## Version
-V1.8
+V2.0
 
 ## Change Log
+- **V2.0 (2026-08-12)**: 与六库统一分层口径对齐：A0 明确不附带排除项，A1/B 继续应用排除项；保留已实测有效的对象+技术召回结构。
+- **V1.9 (2026-08-12)**: 依据 IEEE 官网与真实零命中案例重构召回层级：A0 使用对象+技术的 All Metadata 基线，A1 再加入任务层；B 仅在题名中锁定对象+技术。复合对象词自动补充重复中心词（如 `fish`），或读取 `tier1_recall_anchor`；避免 `aquaculture fish` 等过窄短语和三层全题名强制共现造成 0 结果。
 - **V1.8 (2026-08-11)**: 按 IEEE Xplore 当前官方 Search Tips 修正 25-term 口径：限制作用于“未被布尔运算符分隔的连续检索词”组成的 search clause，不再把整条查询的所有 OR 同义词累计后拆分；保留完整 Query A。单词默认不加引号以保留词干扩展，多词固定短语才加引号；补充每查询最多 10 个通配符及通配符前至少 3 个字符的校验；Query D 改为技术/方法层与应用/任务层的真正 NEAR/ONEAR 共现。
 - **V1.7 (2026-08-11)**: 与 `query_crafter/scripts/query_generator.py` 实现对齐：Query A 默认 All Metadata；Query B 逐项重复 `"Document Title":`；按 25 个 keyword/quoted-phrase values 自动拆分；条件生成 Query C；补齐 NEAR/ONEAR Query D 与自动化回归测试。
 - **V1.6 (2026-08-10)**: 对照 IEEE Xplore 官方 Command Search 帮助页（xplorestaging.ieee.org/Xplorehelp）修正语法口径——**字段名是可选限定符**（官方 Step 1：不写字段名则默认搜全部 metadata，运算符示例 `"wireless sensor network" AND security`、`implantable NEAR/3 cardiac` 均无字段名），不再强制"每个搜索词都带字段名"；保留官方明确禁止的写法（`"Document Title":("a" OR b)` 字段内括号 OR 无效）；Query A/D 模板改为官方风格（无字段名简洁写法 + 可选字段限定说明）；NEAR 用官方简单示例；25 terms 改官方原文口径。修正此前"逐词重复字段名"的过度泛化（V1.5），避免生成与官方风格脱节的查询。
@@ -41,9 +43,9 @@ You are an expert research librarian specializing in systematic literature retri
 The user (or the calling skill, Search Strategist) must provide:
 1. **Research Direction**: A description of the research topic, with emphasis on the technology/method dimension (e.g., "deep learning for medical image segmentation").
 2. **Keyword Tiers** (from Scope Definer's Review Scope Confirmation Document):
-   - Tier 1 – Target Object/Domain: The subject or application domain (e.g., "autonomous vehicle", "medical image", "power transformer", or a species/organism when the field is biological).
+   - Tier 1 – Target Object/Domain: The subject or application domain. Retain exact domain phrases and include at least one standalone recall anchor (e.g. `fish` alongside `aquaculture fish`), either in Tier 1 or `tier1_recall_anchor`.
    - Tier 2 – Technology/Method: The relevant techniques (e.g., deep learning, object detection, signal denoising, reinforcement learning, semantic segmentation).
-   - Tier 3 – Application/Task: The specific problem (e.g., anomaly detection, fault diagnosis, behavior recognition, biomass estimation).
+   - Tier 3 – Application/Task: The specific problem (e.g., anomaly detection, fault diagnosis, behavior recognition, biomass estimation). Optional `tier3_recall_anchor` supplies standalone task concepts such as `quality`, `freshness`, or `grading`.
 3. **Date Range** (optional): Publication years to include (e.g., 2020-2025). On IEEE Xplore this is applied via the left-side `Publication Year` filter (see Step 2-F).
 4. **Search Focus** (optional): Whether to prioritize review articles, conference proceedings, or journal papers.
 
@@ -51,6 +53,8 @@ The user (or the calling skill, Search Strategist) must provide:
 
 ### Step 1: Deconstruct the Research Question
 Based on the input keyword tiers, identify and organize the key concepts. For IEEE Xplore, prioritize the technology/method and application/task tiers, as these align with the platform's strength in engineering and computer science. The species/object tier is used to narrow the application domain.
+
+Before query construction, ensure Tier 1 has a standalone platform recall anchor. Derive only a repeated center word from multiple compound phrases (e.g. `fish` from `aquaculture fish`, `farmed fish`, `fish fillet`), or use explicit `tier1_recall_anchor`; do not promote isolated modifiers such as `farmed` or `cultured` into standalone terms.
 
 ### Step 2: Construct the Core Query
 Using IEEE Xplore's **Command Search** syntax (Advanced Search → Command Search tab), build the query following these rules.
@@ -168,21 +172,27 @@ Present the finalized search query in a clearly formatted text box that the user
 > **正确操作路径**：进入 IEEE Xplore → 点击 **Advanced Search** → 切到 **Command Search** 标签页 → 将下方检索式整段粘入文本框 → 点 **Search**。
 > 若误贴进结构化表单或默认检索框，会因语法不被识别而报错。本 skill 产出的全部检索式均为 **Command Search 检索词**。
 
-**Query A (Command Search): Broad Sensitivity Search (for maximum recall)**
-> 💡 官方默认风格：**不写字段名**（自动搜全部 metadata，见官方运算符示例）。`"Abstract":` 只检索摘要，覆盖范围小于 All Metadata，二者不等价。25-term 限制按单个 search clause 校验，不按整条查询累计 OR 同义词。
+**Query A0 (Command Search): Recall Baseline (object + required technology)**
+> 💡 IEEE 是工程方法补充库。A0 不写字段名，默认搜全部 metadata；只强制对象与必需技术共现，用于判断平台是否有相关技术文献。应用/任务词放入 A1，不在 A0 强制。
 ```
-("[concept1]" OR "[synonym1]") AND ("[concept2]" OR "[synonym2]") AND ("[concept3]" OR "[synonym3]") NOT ("[excluded1]" OR "[excluded2]")
+("[object phrase]" OR [standalone object anchor]) AND ("[technology1]" OR "[technology2]") NOT ("[excluded1]" OR "[excluded2]")
 ```
 *Example:*
 ```
-("fish" OR "aquaculture fish" OR "fish fillet" OR "whole fish") AND ("spectral imaging" OR "hyperspectral imaging" OR "multispectral imaging" OR "near-infrared imaging") AND ("quality assessment" OR "freshness" OR "spoilage" OR "adulteration") NOT ("chemical method" OR "fruit")
+(fish OR "aquaculture fish" OR "fish fillet") AND ("spectral imaging" OR "hyperspectral imaging" OR "multispectral imaging") NOT ("water quality monitoring")
 ```
-*说明：OR/AND/NOT 会分隔 search clause；本例每个原子 clause 均远低于 25 个连续检索词。年份在结果页左侧 `Publication Year` 过滤。此写法与官方 AND/OR/NOT 示例（`"wireless sensor network" AND security`）风格一致。*
+*说明：如果 A0 仍为 0，先检查对象通用锚点与粘贴位置；不要继续叠加任务词或标题字段。年份在结果页左侧 `Publication Year` 过滤。*
 
-**Query B (Command Search): High-Precision Core Search (for maximum specificity)**
-> 💡 高精度检索推荐加 `"Document Title":` 字段限定（官方明确支持）；每个 OR 项前带字段名（`"Document Title":("a" OR b)` 无效）。
+**Query A1 (Command Search): Topical Search (object + technology + task)**
 ```
-("Document Title":"[critical_concept1]" OR "Document Title":"[critical_synonym1]") AND ("Document Title":"[critical_concept2]")
+("[object phrase]" OR [object anchor]) AND ("[technology1]" OR "[technology2]") AND ([task core1] OR [task core2] OR "[task phrase]")
+```
+*说明：任务层保留原短语，同时补充可独立检索的核心词，如 `quality`、`freshness`、`grading`、`weight`。A1 为 0 时回退 A0，而不是判定 IEEE 无相关文献。*
+
+**Query B (Command Search): Title Core Search (object + technology)**
+> 💡 仅将对象和技术限定到题名；不要要求对象、技术、品质任务三层都出现在题名。每个 OR 项前带字段名（`"Document Title":("a" OR b)` 无效）。
+```
+("Document Title":"[object phrase]" OR "Document Title":[object anchor]) AND ("Document Title":"[technology1]" OR "Document Title":"[technology2]")
 ```
 *Example:*
 ```

@@ -1,10 +1,10 @@
 ---
 name: wanfang_query_crafter
-description: "Wanfang检索式构建器 | 中文关键词→万方高级检索/专业检索（资源类型限定、字段选择、AND/OR/NOT 逻辑组配、精确匹配双引号、时间范围），产出高级检索配置+专业检索布尔式。QueryStrategist子模块，中文文献补充专用。Pure LLM-agent skill; no external MCP server required."
+description: "Wanfang检索式构建器 | 将中文三级关键词转化为万方高级/专业检索配置，生成 A0 对象+技术召回式、A1 三层主题式和 B 精确匹配式，支持字段选择、AND/OR/NOT 与结果页筛选。QueryStrategist 中文补充子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.3
+  version: 1.4
   keywords: [Wanfang, search query, Chinese literature, QueryStrategist]
   triggers: [万方, 检索式, 中文文献]
 ---
@@ -26,9 +26,10 @@ This skill is part of the **QueryStrategist** workflow (Step 2). It is invoked b
 Wanfang Query Crafter
 
 ## Version
-V1.3
+V1.4
 
 ## Change Log
+- **V1.4 (2026-08-12)**：改为 A0/A1/B 分层：A0 仅对象+必需技术并使用模糊匹配，不加排除；A1 加入任务与排除；B 使用精确匹配收紧。
 - **V1.3 (2026-08-11)**：按万方当前官方“高级检索/专业检索”界面修正：专业检索由资源类型、字段下拉框和布尔文本框共同组成，生成器输出可粘贴到文本框的 `AND/OR/NOT` 表达式，不再生成官网当前界面未展示的 `主题:(...)` 字段前缀，也不再宣称支持 CNKI 的 `* + -` 运算符。
 
 ## Description
@@ -89,23 +90,25 @@ Present the result as (a) a row-by-row form configuration table that mirrors Wan
 - **技术层 (Technology/Method)**: [关键词1], [关键词2], ...
 - **应用层 (Application/Task)**: [关键词1], [关键词2], ...
 
-### 2. Recommended Wanfang Advanced Search Configuration (高级检索 / 跨库检索)
+### 2. A0 召回基线（高级检索 / 跨库检索）
 **Resource types (资源类型)**: ☑ 学术期刊 ☑ 学位论文 ☑ 会议论文 ☐ 专利 ☐ 科技报告
 `
 Row 1: [Field: 主题] | Value: (自动驾驶 OR 智能网联汽车) | Match: 模糊 | Logic→next: 与
-Row 2: [Field: 关键词] | Value: (计算机视觉 OR 深度学习) | Match: 模糊 | Logic→next: 与
-Row 3: [Field: 题名] | Value: (目标检测 OR 轨迹预测) | Match: 精确 | （末行，无后续逻辑关系符）
+Row 2: [Field: 主题] | Value: (计算机视觉 OR 机器视觉) | Match: 模糊 | （末行，无后续逻辑关系符）
 `
 **Time range (发表时间)**: 2020 – 2026
 
-### 3. Professional Search Boolean Expression
+### 3. A1 主题检索（Professional Search）
 Select `全部主题` or `主题` in the field dropdown, then paste:
 `
-(自动驾驶 OR 智能网联汽车) AND (计算机视觉 OR 深度学习) AND (目标检测 OR 轨迹预测)
+(自动驾驶 OR 智能网联汽车) AND (计算机视觉 OR 机器视觉) AND (目标检测 OR 轨迹预测) NOT 交通事故
 `
 Set publication years with the official `发表时间` controls.
 
-### 4. Usage Guide & Best Practices
+### 4. B 精准检索
+将对象、必需技术和任务组切换为精确匹配；年份和文献类型继续使用官方筛选控件。
+
+### 5. Usage Guide & Best Practices
 - **Step 1**: Visit the Wanfang Data homepage (https://www.wanfangdata.com.cn).
 - **Step 2**: Click the **"高级检索"** button to the right of the homepage search box; confirm you are on the "跨库检索" / "高级检索" page.
 - **Step 3**: In "资源类型", check the needed categories (multi-select). For each row, pick a field (主题/题名/关键词/摘要/作者/作者单位/刊名/发表时间) and enter the value; click "+" to add rows (up to 5+).

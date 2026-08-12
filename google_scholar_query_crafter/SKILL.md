@@ -1,10 +1,10 @@
 ---
 name: google_scholar_query_crafter
-description: "Google Scholar检索式构建器 | 三层关键词→Google Scholar高级语法（intitle/allintitle/intext/author/source/site/filetype 字段限定、精确短语双引号、排除 -词、OR大写、AROUND(n)邻近、| 同义、256字符上限），产出基础最大召回检索式+精确检索式+预印本检索式。QueryStrategist子模块。Pure LLM-agent skill; no external MCP server required."
+description: "Google Scholar检索式构建器 | 将三级关键词转化为不超过 256 字符的 A0 对象+技术召回查询、A1 三层主题查询和 B intitle 精准查询；支持 OR、短语与 -排除词并限制互补查询数量。QueryStrategist Search A 子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
   skill-author: PanY
-  version: 1.3
+  version: 1.4
   keywords: [Google Scholar, search query, scholar, QueryStrategist]
   triggers: [Google Scholar, 检索式, 学者]
 ---
@@ -23,9 +23,10 @@ metadata:
 **QueryStrategist** 工作流（V2.0），作为 Search Strategist V1/V2 中 Search A（Query Crafter）的子模块之一。
 
 ## 版本
-V1.3
+V1.4
 
 ## 变更记录
+- **V1.4 (2026-08-12)**：改为 A0/A1/B 分层；A0 仅对象+必需技术，A1 加入任务，B 使用 `intitle:` 收紧。长词表采用最多 6 条按序配对的互补查询，取消三层笛卡尔积。
 - **V1.3 (2026-08-11)**：Search A 改为“对象 + 必需技术锚点 + 任务”三概念强制共现；长词表不再静默截断，而按字符预算生成多条互补查询，所有查询均保留对象层和技术锚点，任务词跨查询完整覆盖。
 
 ## 描述
@@ -76,8 +77,11 @@ V1.3
 - 技术层：`(keyword1 OR keyword2 OR ...)`
 - 应用层：`(keyword1 OR keyword2 OR ...)`
 
-### Step 2：生成主检索式
-**基础检索式 A 采用三概念强制共现**：领域层、必需技术锚点和应用层分别用 `OR` 组合，三组之间以空格连接（隐式 AND）：
+### Step 2：生成分层检索式
+**A0 召回基线**只要求对象与必需技术共现：
+`(物种层) (必需技术锚点)`
+
+**A1 主题检索**再加入任务层：
 `(物种层) (必需技术锚点) (应用层)`
 *示例*：
 `
@@ -86,7 +90,7 @@ V1.3
 若提供 `tier2_required_anchor`，Search A 只使用该组作为必需技术概念；机器学习等支持方法进入补充查询，不得替代核心技术。
 
 **⚠️ 256 字符硬上限**：Scholar 检索式总长 ≤256 字符，超出部分被**静默截断**（不会报错但检索不完整）。当关键词较多时：
-- 单条查询无法容纳全部关键词 → 按对象/锚点/任务的独立预算拆成多条互补检索；每条都保留三类概念，多条合起来覆盖全部关键词。
+- 单条查询无法容纳全部关键词 → A0 与 A1 分别拆成最多 6 条互补查询，按分组序号循环配对，不生成笛卡尔积。
 - 排除串（`-词`）过长会挤占主检索词空间 → **省略排除串**，改由 Scholar 检索结果页的左侧筛选器或手动 `-词` 补充过滤（Query Crafter 生成器在 `warnings` 中提示此项）。
 
 ### Step 3：添加排除条件
@@ -119,16 +123,22 @@ V1.3
 
 ### 2. Google Scholar 检索式
 
-**检索式 A：基础检索式（通用，最大召回率）**
+**检索式 A0：召回基线（对象+必需技术）**
 `
-(物种层) (必需技术锚点) (应用层分组1)
-(物种层) (必需技术锚点) (应用层分组2)
+(物种层分组1) (必需技术锚点分组1)
+(物种层分组2) (必需技术锚点分组2)
 `
 *说明*：上面每一行是一条独立查询，不能把多行整体粘贴为一次检索。
 *示例*：
 `
-(autonomous vehicle OR self-driving car OR "connected vehicle") ("computer vision" OR "deep learning") ("lane detection" OR "trajectory prediction")
+(autonomous vehicle OR self-driving car OR "connected vehicle") ("computer vision" OR "machine vision")
 `
+
+**检索式 A1：主题检索（对象+必需技术+任务）**
+`
+(物种层分组) (必需技术锚点分组) (应用层分组)
+`
+排除项仅在完整 `-词` 串加入后仍不超过 256 字符时追加；否则保留 A1 主查询并提示人工筛选。
 
 **检索式 B：精确检索式（推荐，兼顾召回与精度）**
 通过 `intitle:` 限定关键概念，确保标题包含核心主题：
@@ -138,11 +148,6 @@ V1.3
 *示例*：
 `
 (autonomous vehicle OR self-driving car) ("computer vision" OR "deep learning") ("lane detection" OR "trajectory prediction") intitle:review
-`
-
-**检索式 C：预印本检索式（如需补充最新前沿）**
-`
-(物种层) AND (技术层) AND (应用层) site:arxiv.org filetype:pdf
 `
 
 ### 3. 使用建议
