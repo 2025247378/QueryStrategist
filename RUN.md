@@ -43,7 +43,6 @@ QueryStrategist/
 | `_shared_tools` | `validate_skills.py` | 套件自校验（frontmatter 合规检查；路径自动推导，可在发布包内直接运行） |
 | `_shared_tools` | `validate_pipeline_state.py` | 项目配置与流水线状态结构校验 |
 | `_shared_tools` | `render_deliverables.py` | Markdown/CSV 编码规范化并生成离线 HTML |
-| `_shared_tools` | `build_ppt.py` | 参赛 PPT 生成（依赖 python-pptx；支持 `--output`） |
 | `_shared_tools` | `build_scp_package.py` | 从开发源确定性重建 SCP 单包 |
 
 ## 依赖安装

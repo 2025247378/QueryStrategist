@@ -11,6 +11,7 @@ from pathlib import Path
 
 EXCLUDED_NAMES = {
     ".git",
+    "tests",
     "__pycache__",
     ".pytest_cache",
     ".mypy_cache",
@@ -18,6 +19,9 @@ EXCLUDED_NAMES = {
     "projects",
 }
 EXCLUDED_PATTERNS = (
+    ".gitattributes",
+    ".gitignore",
+    ".gitkeep",
     ".env",
     ".env.*",
     "harvest*.json",
@@ -27,6 +31,12 @@ EXCLUDED_PATTERNS = (
     "scope_card.*",
     "query_pack.*",
     "usage_guide.*",
+    "*.pptx",
+    "README.md",
+    "RUN.md",
+    "build_scp_package.py",
+    "ensure_tool.py",
+    "validate_skills.py",
     "BUILD_MANIFEST.json",
 )
 
@@ -70,6 +80,17 @@ def _convert_subskills(stage):
     return converted
 
 
+def _remove_empty_directories(stage):
+    """Remove empty skeleton directories after development-only files are filtered."""
+    for path in sorted(
+        (item for item in stage.rglob("*") if item.is_dir()),
+        key=lambda item: len(item.parts),
+        reverse=True,
+    ):
+        if not any(path.iterdir()):
+            path.rmdir()
+
+
 def _write_manifest(stage):
     files = []
     for path in sorted(stage.rglob("*")):
@@ -99,6 +120,7 @@ def build(source, destination, force=False):
     if not (stage / "SKILL.md").is_file():
         shutil.rmtree(stage)
         raise RuntimeError("staging 缺少根 SKILL.md")
+    _remove_empty_directories(stage)
     _write_manifest(stage)
 
     if destination.exists() and not force:

@@ -630,7 +630,7 @@ def main():
         if missing and not installed:
             print(f"[check-deps] 仍有缺失（自动安装失败，请手动执行 pip install {' '.join(missing)}）")
         elif not missing:
-            print("[check-deps] 依赖齐全，环境就绪 ✅")
+            print("[check-deps] 依赖齐全，环境就绪 [OK]")
         return
 
     if args.dry_run:

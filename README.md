@@ -85,7 +85,7 @@ QueryStrategist/
 ├── cnki_query_crafter/                      # 中国知网（中文补充）
 ├── wanfang_query_crafter/                   # 万方（中文补充）
 ├── literature_harvester/                    # API 收割 + 验证（OpenAlex 收割 / Crossref 逐条验证）
-└── _shared_tools/                           # 共享工具（ensure_tool.py / validate_skills.py / build_ppt.py）
+└── _shared_tools/                           # 运行、校验与发布辅助脚本
 ```
 
 > 每个子模块目录均含 `SKILL.md`（本地安装形态，可直接注册为独立 Skill）及所需资源。SCP 发布包由 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录> --force` 显式覆盖生成；构建结果包含 `BUILD_MANIFEST.json`，不再手工同步副本。
@@ -97,7 +97,6 @@ QueryStrategist/
 | 工具 / 库 | 用途 | 许可证 |
 |---|---|---|
 | 内置 LLM Agent | 全流程推理 | — |
-| python-pptx | 生成功能介绍 PPT（`_shared_tools/scripts/build_ppt.py`） | MIT |
 | openpyxl | 表格导出 | MIT |
 | SJR 数据集 | 期刊质量评分（策展映射；不随仓库分发） | CC BY-NC 4.0 |
 | OpenAlex API | 文献元数据收割（主源，无 key） | 各自服务条款 |

@@ -24,7 +24,9 @@ class ReleaseToolTests(unittest.TestCase):
         ignored = BUILDER._ignore(Path("."), [
             ".env", ".env.example", "harvest-demo.json", "candidate_list.csv",
             "scope_card.html", "query_pack.md", "usage_guide.html",
-            "normal.md", "private.pem",
+            "normal.md", "private.pem", "demo.pptx", ".gitkeep",
+            "README.md", "RUN.md", "build_scp_package.py", "ensure_tool.py",
+            "validate_skills.py", "tests",
         ])
         self.assertIn(".env", ignored)
         self.assertNotIn(".env.example", ignored)
@@ -34,6 +36,12 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertIn("query_pack.md", ignored)
         self.assertIn("usage_guide.html", ignored)
         self.assertIn("private.pem", ignored)
+        self.assertIn("demo.pptx", ignored)
+        for development_only in (
+            ".gitkeep", "README.md", "RUN.md", "build_scp_package.py",
+            "ensure_tool.py", "validate_skills.py", "tests",
+        ):
+            self.assertIn(development_only, ignored)
         self.assertNotIn("normal.md", ignored)
 
     def test_build_writes_manifest_and_requires_explicit_overwrite(self):
@@ -43,6 +51,11 @@ class ReleaseToolTests(unittest.TestCase):
             source.mkdir()
             (source / "SKILL.md").write_text("root", encoding="utf-8")
             (source / ".env").write_text("SECRET=do-not-copy", encoding="utf-8")
+            (source / "demo.pptx").write_bytes(b"presentation")
+            (source / "README.md").write_text("development docs", encoding="utf-8")
+            tests = source / "tests"
+            tests.mkdir()
+            (tests / "test_demo.py").write_text("pass", encoding="utf-8")
             (source / "VERSION").write_text("4.4.0", encoding="utf-8")
             for index in range(11):
                 child = source / f"module_{index}"
@@ -53,6 +66,9 @@ class ReleaseToolTests(unittest.TestCase):
             manifest = json.loads((destination / "BUILD_MANIFEST.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["version"], "4.4.0")
             self.assertFalse((destination / ".env").exists())
+            self.assertFalse((destination / "demo.pptx").exists())
+            self.assertFalse((destination / "README.md").exists())
+            self.assertFalse((destination / "tests").exists())
             self.assertTrue((destination / "module_0" / "SKILL.sub.md").exists())
             with self.assertRaises(FileExistsError):
                 BUILDER.build(source, destination)

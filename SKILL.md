@@ -313,8 +313,7 @@ Next: deliver search strategy pack after confirmation
 ```
 querystrategist/                    # 上架目录（文件夹内含 SKILL.md，作为单个 Skill 上传）
 ├── SKILL.md                        # 主 Skill（本文件，唯一入口，承担编排器职责）
-├── README.md                       # 提交文档
-├── RUN.md                          # 运行手册
+├── VERSION                         # 发布版本
 ├── LICENSE                         # MIT
 ├── setup_wizard/                   # Step 0 子模块（指令: setup_wizard/SKILL.sub.md）
 ├── scope_definer/                  # Step 1 子模块
@@ -323,7 +322,7 @@ querystrategist/                    # 上架目录（文件夹内含 SKILL.md，
 ├── wos_query_crafter/  scopus_query_crafter/  ieee_query_crafter/
 ├── google_scholar_query_crafter/  cnki_query_crafter/  wanfang_query_crafter/
 ├── literature_harvester/           # API 收割子模块（OpenAlex 收割 + Crossref 验证）
-└── _shared_tools/                  # 共享工具（ensure_tool.py / validate_skills.py / build_ppt.py）
+└── _shared_tools/                  # HTML 交付生成与项目状态校验脚本
 ```
 
-每个子模块目录均含 `SKILL.sub.md`（SCP 单包形态；本地独立安装时改回 `SKILL.md`）+ 骨架 `scripts/` `references/` `assets/`。
+每个子模块目录均含 `SKILL.sub.md`（SCP 单包形态；本地独立安装时改回 `SKILL.md`）；仅保留实际被运行流程引用的 `scripts/` 与 `assets/` 内容。
