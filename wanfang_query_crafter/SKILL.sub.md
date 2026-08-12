@@ -4,16 +4,16 @@ description: "Wanfang检索式构建器 | 将中文三级关键词转化为万�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.1.2
+  version: v1.2.1
   keywords: [Wanfang, search query, Chinese literature, QueryStrategist]
   triggers: [万方, 检索式, 中文文献]
 ---
 
-## SCP Usage
+## 子模块运行信息
 
 - **Type**: LLM-agent skill (no MCP server dependency; Phase 1-5 zero external model).
-- **Invocation**: Called by `querystrategist` (main Skill), or directly by the user.
-- **Runnable helpers**: Prompt-driven skill — no mandatory script (`scripts/` is a placeholder).
+- **Invocation**: Called through `querystrategist` (main Skill), including when the user requests a single submodule capability.
+- **Runnable helpers**: Prompt-driven skill — no mandatory helper script.
 - **Data flow**: Reads/writes the shared Pipeline Context across the Step 0-2 workflow.
 
 

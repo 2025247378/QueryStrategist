@@ -4,16 +4,16 @@ description: "文献检索项目预检配置向导 | 锁定写作类型（综述
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.1.2
+  version: v1.2.1
   keywords: [literature search, configuration, setup wizard, writing type, QueryStrategist]
   triggers: [文献检索配置, 检索设置, 配置写作类型, setup, 开始配置]
 ---
 
-## SCP Usage
+## 子模块运行信息
 
 - **Type**: LLM-agent skill (no MCP server dependency; Phase 1-5 zero external model).
-- **Invocation**: Called by `querystrategist` (main Skill), or directly by the user.
-- **Runnable helpers**: Prompt-driven skill — no mandatory script (`scripts/` is a placeholder).
+- **Invocation**: Called through `querystrategist` (main Skill), including when the user requests a single submodule capability.
+- **Runnable helpers**: Prompt-driven skill — no mandatory helper script.
 - **Data flow**: Reads/writes the shared Pipeline Context across the Step 0-2 workflow.
 
 
@@ -200,11 +200,16 @@ Present the following dimensions one at a time. **Before each item, output 话�
    - 仅当选择了具体期刊时：使用 `AskUserQuestion` 弹窗（无此工具则聊天内列出「1. 上传 / 2. 跳过」请用户回复）：Label「上传」/「跳过」，Description 分别为"提供 PDF 文件路径"/"暂不需要，直接继续"
    - 如用户选择上传，引导用户提供文件路径并记录
 
+   **期刊层级条件分支（MANDATORY）**：若用户已填写具体目标期刊，不再询问 `target_journal_tier`。记录 `target_journal`，将期刊定位记为 `journal-directed`，并提示：
+   > 已记录目标期刊。由于具体期刊已确定，本轮将直接以该期刊的领域定位和质量标准生成检索策略，不再单独询问期刊层级。
+   具体期刊名称不自动推断 Q1/Q2；如用户选择 `暂未确定`，才继续询问目标期刊层级。
+
 3. **Writing Type (Mandatory)**
    - Options: `综述` / `研究论著/实验研究` / `学位论文` / `开题报告` / `基金申请` / `调研报告` / `自定义`
    - Impact（A5 逐字）: 这决定下游检索策略的**查全/查准/新颖性权重**与检索式版本偏好——综述先用 A0 查漏并以 A1 为主题主检索，研究论著偏好精准式 B（查准），开题报告/基金申请侧重近 2 年新颖性。这是本工具的核心差异化。Determines the downstream recall/precision/novelty weighting and query preference: reviews use A0 for recall auditing and A1 as the topical search, research papers favor precise B, and proposals/grants emphasize the latest two years.
 
 4. **Target Journal Tier (Optional but strongly recommended)**
+   - **仅当 `target_journal == "暂未确定"` 时询问**；已有具体期刊时跳过并保存 `journal_tier: "journal-directed"`
    - Options: `Top SCI Journals (Q1)` / `Mainstream SCI Journals (Q2–Q3)` / `Specialized Field Journals` / `No specific target; write first, submit later`
    - Impact（A5 逐字）: 这影响检索策略的查准/查全侧重与候选清单的期刊质量排序——目标是 Q1 时偏好高被引核心文献。Adjusts precision/recall emphasis and journal-quality ranking in the candidate list (Q1 → prefer high-cited core literature).
 

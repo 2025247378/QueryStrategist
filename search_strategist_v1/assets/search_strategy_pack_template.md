@@ -1,13 +1,13 @@
 # 检索策略包模板（Search Strategy Pack）
 
 > 本模板定义 QueryStrategist 流水线终点（Step 2 / G2 确认后）交付的**检索策略包**标准结构。
-> 包含四项相互衔接的逻辑交付物，全部落盘于 `projects/<id>/`。
+> 包含四项相互衔接的逻辑交付物，默认落盘于 `projects/<active_project_id>/deliverables/`。
 > 所有字段必须标注上游出处（`【继承自 …】`），禁止凭空生成；无出处条目标记【待补】并向用户确认。
 > Markdown 是可编辑源文件，HTML 是默认阅读入口；CSV 和 Markdown 统一使用 UTF-8 BOM。
 
 ## 交付格式与编码硬规则
 
-1. 输出默认入口 `index.html`，以及 `scope_card.md/.html`、`query_pack.md/.html`、`candidate_list.csv/.md/.html`、`usage_guide.md/.html`。
+1. 输出唯一默认阅读入口 `index.html`，以及作为导出或审计备份的 `scope_card.md/.html`、`query_pack.md/.html`、`candidate_list.csv/.md/.html`、`usage_guide.md/.html`。
 2. HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，不得维护第二套内容。
 3. Markdown 和 CSV 写为 UTF-8 BOM；所有文本严格 UTF-8 解码，不得出现 `U+FFFD` 替换字符。
 4. 最终文件使用 `[已验证]`、`[待人工核验]`、`[已剔除]`、`[注意]` 等纯文本状态，不使用 Emoji。
@@ -39,7 +39,7 @@
 - [ ] 范围：排除项与 Step 1 一致
 - [ ] 互锁：四份文件口径一致
 - [ ] 待补项：所有【待补】已向用户确认或说明
-- [ ] 落盘：四份文件均已写入 `projects/<id>/`
+- [ ] 落盘：四份文件均已写入 `projects/<active_project_id>/deliverables/` 或用户明确指定的目录
 - [ ] 编码：Markdown/CSV 为 UTF-8 BOM，所有文件不含 U+FFFD
 - [ ] 阅读：四份 Markdown 均已生成同名离线 HTML
 - [ ] 入口：`index.html` 可导航到四份内容页，页面无外部资源请求
@@ -68,7 +68,10 @@
 - Tier 3（应用/场景）：【继承自 Step 1】
 
 ## 排除项
-- 【继承自 Step 1】
+- 强排除（可进入 `NOT`）：【继承自 Step 1 `strong_exclusions`】
+- 弱排除（人工筛选提示）：【继承自 Step 1 `soft_exclusions`】
+- 风险排除（默认不进入检索式）：【继承自 Step 1 `risky_exclusions`】
+- 实际写入检索式的排除项：【继承自 Step 1 `query_exclusions`】
 
 ## 优先级规则
 - 【继承自 Step 1】
@@ -88,6 +91,13 @@
 
 > 六库统一给出 A0（对象+必需技术召回基线）、A1（对象+必需技术+任务主题式）和 B（平台专属精准式）。A0 不加任务、排除项、年份或文献类型；排除从 A1 开始应用。IEEE 另保留 C（会议/出版物定向）、D1/D2（NEAR/ONEAR）和 E（综述导向）变体。
 > 策略权重按写作类型调整（见 scope_card.md）。
+> 综述导向变体是补充查询，不是 review-only 限制；A0/A1 始终保留。
+
+## Query QA
+- 总体状态：`PASS / WARNING / FAIL`【继承自 Step 2 `_meta.query_qa`】
+- 平台检查：括号、引号、字段语法、长度与 clause 限制【继承自 Step 2】
+- 警告与修复记录：【继承自 Step 2】
+- `FAIL` 不得进入最终交付。
 
 ## Web of Science
 - 召回基线 A0（对象+必需技术）：【继承自 Step 2 Search A】
@@ -141,7 +151,9 @@
 > Search B status：【completed / skipped_by_user】。若为 `skipped_by_user`，说明用户未授权外部 API 访问，本文件不生成虚假的零结果统计。
 
 ## 统计
-- 总数：【N】篇
+- OpenAlex 原始收割：【N】篇
+- 合并去重后：【N】篇
+- 去重移除：【N】篇
 - 验证状态：verified（Crossref 验证通过）【n1】/ unverified（无 DOI 或瞬时错误）【n2】/ dropped（疑似幻觉/错配，已剔除）【n3】
 - OA 状态：OA 【n4】/ 非OA 【n5】/ 未知 【n6】
 

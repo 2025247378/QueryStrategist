@@ -8,7 +8,7 @@ for _stream in (sys.stdout, sys.stderr):
 # 优先级：
 # 1) --root 显式指定（最高优先）
 # 2) 默认向上逐级查找：从脚本目录开始，逐级向上找第一个含 SKILL.md 或 README.md 的目录。
-#    兼容发布包布局（scripts/ -> _shared_tools -> 包根）与全局安装布局
+#    兼容正式单包布局（scripts/ -> _shared_tools -> 包根）与全局安装布局
 #    （~/.codex/skills/_shared_tools/scripts -> ... -> ~/.codex/skills 即 skills 根）。
 parser = argparse.ArgumentParser(description="校验 skill 套件的 SKILL.md frontmatter 合规性")
 parser.add_argument("--root", help="显式指定扫描根目录（默认向上逐级推导）")
@@ -19,15 +19,19 @@ if args.root:
 else:
     # 默认向上逐级查找 skills 根：命中条件 = 目录下存在至少一个非 _shared_tools
     # 的子目录含 SKILL.md，或目录自身含 SKILL.md（根级总入口）。
-    # 兼容发布包布局（scripts/ -> _shared_tools -> 包根，包根含全部 skill 子目录）
+    # 兼容正式单包布局（scripts/ -> _shared_tools -> 包根，包根含全部 skill 子目录）
     # 与全局安装布局（~/.codex/skills/_shared_tools/scripts -> ... -> skills 根）。
     # 仅以"含 SKILL.md 子目录"为信号，避免把恰好有 README.md 的用户主目录误判为根。
     d = os.path.dirname(os.path.abspath(__file__))
     ROOT = None
     while True:
         has_sub_skill = any(
-            os.path.isdir(os.path.join(d, sub)) and sub != "_shared_tools"
-            and os.path.isfile(os.path.join(d, sub, "SKILL.md"))
+            os.path.isdir(os.path.join(d, sub))
+            and sub != "_shared_tools"
+            and any(
+                os.path.isfile(os.path.join(d, sub, filename))
+                for filename in ("SKILL.sub.md", "SKILL.md")
+            )
             for sub in os.listdir(d)
         )
         if has_sub_skill or os.path.isfile(os.path.join(d, "SKILL.md")):
@@ -125,7 +129,7 @@ if os.path.isfile(root_sk):
         if not rtrg: warns.append("[根SKILL.md] metadata 缺 triggers")
         ok += 1
 
-# 发布包版本一致性：避免 VERSION、根 Skill 和运行文档各自漂移。
+# 正式版本一致性：避免 VERSION、根 Skill 和运行文档各自漂移。
 version_values = {}
 version_file = os.path.join(ROOT, "VERSION")
 if os.path.isfile(version_file):

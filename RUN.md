@@ -1,13 +1,13 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：v1.1.2（以根目录 VERSION 为准）
+版本：v1.2.1（以根目录 VERSION 为准）
 
 ## 快速开始
 
 1. **入口**：对任意支持 Skill 的 Agent 说「**开始文献检索**」或「**Start QueryStrategist**」。
 2. **Step 0**：Setup Wizard 配置写作类型（综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义）+ 目标语言 + 目标期刊 + 时间跨度 + 中文补充（G0 确认）。
-3. **Step 1**：Scope Definer 通过结构化提问收敛为三级关键词体系（对象层 + 必需技术锚点/支持方法 + 任务层）+ 中英文排除项 + 优先级（G1 确认）。
-4. **Step 2**：Search Strategist V1 双通道 —— Search A（六库统一输出 A0 对象+技术召回基线、A1 三层主题式、B 平台专属精准式；IEEE 另有 C/D1/D2/E）+ Search B（联网前说明将访问 OpenAlex/Crossref 并请求一次授权，再使用三层过滤收割候选清单）→ 交付**检索策略包**。A0 不加任务、排除、年份或文献类型；拒绝联网授权时只跳过 Search B，Search A 正常交付。默认打开 `index.html`。
+3. **Step 1**：Scope Definer 通过结构化提问收敛为三级关键词体系（对象层 + 必需技术锚点/支持方法 + 任务层）+ 中英文排除词分级 + 优先级（G1 确认）。只有确认的强排除进入 `NOT`。
+4. **Step 2**：Search Strategist V1 双通道 —— Search A（六库 A0/A1/B 与 Query QA，`FAIL` 必须修复）+ Search B（联网授权后执行 2-3 个 OpenAlex 梯度查询，每个 20-25 条，合并去重后再由 Crossref 验证）→ 交付**检索策略包**。拒绝联网授权时只跳过 Search B。默认目录为 `projects/<active_project_id>/deliverables/`，默认只在聊天展示摘要，并优先打开唯一入口 `index.html`；审计模式才完整展开。
 
 ## 目录清单
 
@@ -16,8 +16,10 @@ QueryStrategist/
 ├── README.md                    # 提交文档
 ├── RUN.md                       # 本文件
 ├── LICENSE                      # MIT
+├── VERSION                      # 当前正式版本
+├── BUILD_MANIFEST.json          # 发布文件完整性清单
 ├── SKILL.md                     # 主 Skill（Step 0–2 状态机入口，唯一 SKILL.md）
-├── setup_wizard/                # Step 0（指令: SKILL.md）
+├── setup_wizard/                # Step 0（指令: SKILL.sub.md）
 ├── scope_definer/               # Step 1
 ├── search_strategist_v1/        # Step 2（终点）
 ├── query_crafter/               # 检索式总控（6 平台）
@@ -28,10 +30,8 @@ QueryStrategist/
 ├── cnki_query_crafter/          # 中国知网（中文补充）
 ├── wanfang_query_crafter/       # 万方（中文补充）
 ├── literature_harvester/        # API 收割 + 验证（OpenAlex 收割 / Crossref 逐条验证）
-└── _shared_tools/               # 共享工具安装器
+└── _shared_tools/               # 运行与校验脚本
 ```
-
-> 开发仓库为本地安装形态；运行 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录> --force` 可显式覆盖重建 SCP 单包形态。发布目录只保留一个根包，并生成 `BUILD_MANIFEST.json`。
 
 ## 关键脚本（Skill 内 `scripts/`）
 
@@ -43,7 +43,6 @@ QueryStrategist/
 | `_shared_tools` | `validate_skills.py` | 套件自校验（frontmatter 合规检查；路径自动推导，可在发布包内直接运行） |
 | `_shared_tools` | `validate_pipeline_state.py` | 项目配置与流水线状态结构校验 |
 | `_shared_tools` | `render_deliverables.py` | Markdown/CSV 编码规范化并生成离线 HTML |
-| `_shared_tools` | `build_scp_package.py` | 从开发源确定性重建 SCP 单包 |
 
 ## 依赖安装
 

@@ -367,6 +367,105 @@ def harvest_openalex_filtered(species_terms, tech_terms, feed_terms,
     return out
 
 
+def deduplicate_papers(papers):
+    """Deduplicate by normalized DOI first, then normalized title/year."""
+    unique = []
+    seen_doi = set()
+    seen_title = set()
+    for paper in papers:
+        doi = _extract_doi(paper.get("doi"))
+        title_key = _norm_title(paper.get("title"))
+        year_key = paper.get("year") or ""
+        if doi:
+            key = f"doi:{doi.casefold()}"
+            if key in seen_doi:
+                continue
+            seen_doi.add(key)
+        else:
+            key = f"title:{title_key}:{year_key}"
+            if key in seen_title:
+                continue
+            seen_title.add(key)
+        unique.append(paper)
+    return unique
+
+
+def harvest_gradient(queries, per_query=25, verify=True, mailto=None,
+                     min_year=None, max_year=None, cache_dir=None,
+                     budgets=None, species_terms=None, tech_terms=None,
+                     task_terms=None, exclude_terms=None,
+                     network_consent=False):
+    """Run a bounded 2-3 query OpenAlex gradient and verify after deduplication.
+
+    ``queries`` contains dictionaries with ``name`` and ``query``. The
+    function collects all OpenAlex records first, deduplicates them, and only
+    then sends DOI-bearing records to Crossref, avoiding duplicate validation
+    requests across overlapping gradients.
+    """
+    if not network_consent:
+        raise PermissionError("未获得网络访问授权：调用 OpenAlex/Crossref 前必须由用户明确同意")
+    queries = list(queries or [])[:3]
+    if not queries:
+        raise ValueError("Search B 至少需要一个受控查询")
+    filtered_terms = (species_terms, tech_terms, task_terms)
+    if any(terms is not None for terms in filtered_terms) and not all(filtered_terms):
+        raise ValueError("三层过滤必须同时提供 species_terms、tech_terms、task_terms")
+    global _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR
+    previous_budget, previous_cache = _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR
+    _ACTIVE_BUDGET = RequestBudget(budgets)
+    _ACTIVE_CACHE_DIR = None if cache_dir is False else (cache_dir or os.environ.get(
+        "HARVEST_CACHE_DIR", os.path.join(os.path.expanduser("~"), ".cache", "querystrategist")))
+    raw = []
+    query_stats = []
+    try:
+        for item in queries:
+            name = str(item.get("name") or item.get("id") or f"query_{len(query_stats) + 1}")
+            query = str(item.get("query") or "").strip()
+            if not query:
+                query_stats.append({"name": name, "harvested": 0, "error": "empty query"})
+                continue
+            try:
+                if all(terms is not None for terms in filtered_terms):
+                    papers = harvest_openalex_filtered(
+                        species_terms, tech_terms, task_terms,
+                        per_platform=per_query, min_year=min_year or 1900,
+                        max_year=max_year, exclude_terms=exclude_terms,
+                    )
+                else:
+                    papers = harvest_openalex(query, per_query, min_year=min_year, max_year=max_year)
+                for paper in papers:
+                    paper["search_b_query"] = name
+                raw.extend(papers)
+                query_stats.append({"name": name, "harvested": len(papers)})
+            except Exception as exc:
+                query_stats.append({"name": name, "harvested": 0, "error": str(exc)})
+        unique = deduplicate_papers(raw)
+        kept, dropped = verify_openalex_results(unique, mailto=mailto, skip_verify=not verify)
+        result = {
+            "queries": queries,
+            "openalex": unique,
+            "verified": [p for p in kept if p.get("verification") == "verified"],
+            "unverified": [p for p in kept if p.get("verification") != "verified"],
+            "dropped": dropped,
+            "errors": [],
+            "query_statistics": query_stats,
+        }
+        result["statistics"] = {
+            "queries_requested": len(queries),
+            "harvested_raw": len(raw),
+            "harvested_deduplicated": len(unique),
+            "duplicates_removed": len(raw) - len(unique),
+            "verified": len(result["verified"]),
+            "unverified": len(result["unverified"]),
+            "dropped": len(dropped),
+            "verify_enabled": bool(verify),
+            "request_budget": _ACTIVE_BUDGET.summary(),
+        }
+        return result
+    finally:
+        _ACTIVE_BUDGET, _ACTIVE_CACHE_DIR = previous_budget, previous_cache
+
+
 # ---------------------------------------------------------------------------
 # Crossref 逐条验证（V2.0 新增 — 去幻觉核心）
 # ---------------------------------------------------------------------------
@@ -593,6 +692,10 @@ def main():
     ap.add_argument("--exclude", nargs="*", default=None,
                     help="三层过滤模式下在标题和摘要中本地排除的词")
     ap.add_argument("--per-platform", type=int, default=20)
+    ap.add_argument("--per-query", type=int, default=25,
+                    help="Search B 梯度模式下每个 OpenAlex 查询最多返回条数（默认 25）")
+    ap.add_argument("--gradient-file",
+                    help="受控 Search B 查询 JSON；最多读取 3 个 {name, query} 查询")
     ap.add_argument("--min-year", type=int, default=None, help="最早发表年份（含）")
     ap.add_argument("--max-year", type=int, default=None, help="最晚发表年份（含）")
     ap.add_argument("--verify", dest="verify", action="store_true", default=True,
@@ -634,6 +737,28 @@ def main():
         return
 
     if args.dry_run:
+        gradient_summary = None
+        if args.gradient_file:
+            try:
+                with open(args.gradient_file, encoding="utf-8-sig") as stream:
+                    gradient_payload = json.load(stream)
+                gradient_queries = gradient_payload.get("queries", gradient_payload) \
+                    if isinstance(gradient_payload, dict) else gradient_payload
+                if not isinstance(gradient_queries, list):
+                    raise ValueError("gradient file must contain a JSON list or a {queries: [...]} object")
+                selected = gradient_queries[:3]
+                if len(selected) < 2:
+                    raise ValueError("受控梯度默认至少需要 2 个查询")
+                if any(not isinstance(item, dict) or not str(item.get("query") or "").strip()
+                       for item in selected):
+                    raise ValueError("每个梯度项必须包含非空 query")
+                gradient_summary = {
+                    "count": len(selected),
+                    "names": [str(item.get("name") or item.get("id") or "unnamed")
+                              for item in selected],
+                }
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                ap.error(f"无法读取 --gradient-file: {exc}")
         print(json.dumps({
             "dry_run": True,
             "query": trace_query or "<demo>",
@@ -643,6 +768,9 @@ def main():
             "task": args.task,
             "exclude": args.exclude,
             "per_platform": args.per_platform,
+            "per_query": args.per_query,
+            "gradient_file": args.gradient_file,
+            "gradient": gradient_summary,
             "min_year": args.min_year,
             "max_year": args.max_year,
             "verify": args.verify,
@@ -668,7 +796,26 @@ def main():
     if bootstrap_installed:
         print(f"[bootstrap] 首次运行已自动安装缺失依赖: {', '.join(bootstrap_installed)}")
 
-    if args.query or tier_mode:
+    if args.gradient_file:
+        try:
+            with open(args.gradient_file, encoding="utf-8-sig") as stream:
+                gradient_payload = json.load(stream)
+            gradient_queries = gradient_payload.get("queries", gradient_payload) \
+                if isinstance(gradient_payload, dict) else gradient_payload
+            if not isinstance(gradient_queries, list):
+                raise ValueError("gradient file must contain a JSON list or a {queries: [...]} object")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            ap.error(f"无法读取 --gradient-file: {exc}")
+        result = harvest_gradient(
+            gradient_queries[:3], per_query=min(max(args.per_query, 1), 25),
+            verify=args.verify, mailto=args.mailto,
+            min_year=args.min_year, max_year=args.max_year,
+            cache_dir=False if args.no_cache else args.cache_dir,
+            budgets={"openalex": args.openalex_budget, "crossref": args.crossref_budget},
+            exclude_terms=args.exclude,
+            network_consent=args.network_consent,
+        )
+    elif args.query or tier_mode:
         result = harvest(trace_query, args.per_platform,
                          verify=args.verify, mailto=args.mailto,
                          min_year=args.min_year, max_year=args.max_year,

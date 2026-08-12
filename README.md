@@ -2,7 +2,7 @@
 
 > QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会通过结构化提问明确研究对象、技术方法、任务指标和排除范围，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
 >
-> **版本**：v1.1.2（2026-08-12）
+> **版本**：v1.2.1（2026-08-12）
 
 ---
 
@@ -20,7 +20,7 @@
 
 ## 2. 方案概述
 
-流水线由状态机主控（根 `SKILL.md`，即主 Skill / 编排器）按 **Step 0–2** 顺序串联 3 个子模块，每步结束设强制人工确认门（G0–G2）。开发仓库使用本地安装形态（子模块为 `SKILL.md`）；`build_scp_package.py` 会生成 SCP 单包形态（根入口保留 `SKILL.md`，子模块转换为 `SKILL.sub.md`）。
+流水线由状态机主控（根 `SKILL.md`，即主 Skill / 编排器）按 **Step 0–2** 顺序串联 3 个子模块，每步结束设强制人工确认门（G0–G2）。本仓库采用可直接发布的单包结构：根 `SKILL.md` 是唯一入口，11 个子模块以 `SKILL.sub.md` 保存并由主 Skill 读取执行。
 
 | Step | 子 Skill | 关键产出 | 主导方 |
 |:--:|:--|:--|:--:|
@@ -34,24 +34,25 @@
 
 ## 3. 核心设计
 
-1. **意图 → 策略的结构化转化**：Scope Definer 通过结构化提问把模糊研究方向收敛为「对象层 + 必需技术锚点/支持方法 + 任务层 + 排除项」，并为中文数据库保留独立中文词表，再机械化为 6 库高级检索式——杜绝靠直觉拼关键词。
+1. **意图 → 策略的结构化转化**：Scope Definer 通过结构化提问把模糊研究方向收敛为「对象层 + 必需技术锚点/支持方法 + 任务层 + 排除词分级」，并为中文数据库保留独立中文词表，再机械化为 6 库高级检索式。宽泛排除词默认降级为人工筛选提示，避免 `NOT` 误杀。
 2. **按写作类型调策略权重**：综述查全优先、研究论著查准优先、开题/基金兼顾新颖性，不同写作类型对应不同的检索式版本与候选清单排序——LLM 比数据库自带 Query Builder 强的地方。
 3. **双通道检索**：Search A 产出可手填的 6 库检索式；Search B 在用户明确授权后调用公开 API 自动收割元数据，两条通道互为校验。拒绝联网授权时 Search A 仍正常交付。
 4. **人机闸门（负责任 AI）**：3 个强制决策门（G0–G2），AI 只呈客观事实与策略，范围与检索策略确认始终由人类掌握。
 5. **零密钥、需授权、去幻觉的 API 收割**：联网前只请求一次授权，说明将访问 `api.openalex.org` 与 `api.crossref.org`；不下载全文，标准流程使用 Crossref 匿名公共池且不提交个人信息。验证不通过的疑似幻觉/错配条目标记 `dropped` 剔除。
 6. **API 配额守卫（MANDATORY）**：收割脚本内置分端点请求预算、429 熔断、Retry-After 上限、响应缓存、dry-run 与失败统计。
-7. **跨源去重与相关性护栏**：收割层做跨库元数据归一、DOI 去重；高噪声语料按领域相关词过滤，显著提升信噪比。
+7. **受控梯度收割与先去重后验证**：Search B 默认执行 2-3 个 OpenAlex 梯度查询，每个 20-25 条；合并后按 DOI 或标题+年份去重，再对唯一 DOI 调用 Crossref。结果不足时由用户决定是否追加一次扩展查询。
+8. **六库 Query QA**：统一检查括号、引号、平台字段、Google Scholar 长度、IEEE clause、宽泛排除词、技术锚点与 review-only 风险，输出 `PASS/WARNING/FAIL`；`FAIL` 阻断交付。
 
 ---
 
 ## 4. 交付物（检索策略包）
 
-流程终点（G2 确认后）产出**检索策略包**，全部落盘于 `projects/<id>/`，标准模板见 `search_strategist_v1/assets/search_strategy_pack_template.md`：
+流程终点（G2 确认后）产出**检索策略包**，默认落盘于 `projects/<active_project_id>/deliverables/`；用户已提供路径时直接使用。标准模板见 `search_strategist_v1/assets/search_strategy_pack_template.md`：
 
-- **`index.html` — 默认阅读入口**：统一导航到范围卡、检索式、候选文献和使用说明；无需安装软件，可离线打开。
+- **`index.html` — 唯一默认阅读入口**：统一导航到范围卡、检索式、候选文献和使用说明；无需安装软件，可离线打开。其他文件作为导出和审计备份保留。
 
-- **`scope_card.md/.html` — 范围界定卡**：三级关键词体系（Tier1 对象 / Tier2 必需技术锚点与支持方法 / Tier3 任务）+ 中英文排除项 + 写作类型 + 策略权重（查全/查准/新颖性）。
-- **`query_pack.md/.html` — 多平台检索式合集**：6 库高级检索式，每库给 A0（对象+必需技术召回基线）、A1（三层主题式）和 B（平台专属精准式）；IEEE 另保留会议定向、NEAR/ONEAR 邻近和综述导向变体（C/D1/D2/E）。A0 不加任务、排除、年份或文献类型；检索式使用代码块保存，HTML 渲染不改写其内容。
+- **`scope_card.md/.html` — 范围界定卡**：三级关键词体系（Tier1 对象 / Tier2 必需技术锚点与支持方法 / Tier3 任务）+ 中英文排除词分级 + 写作类型 + 策略权重（查全/查准/新颖性）。
+- **`query_pack.md/.html` — 多平台检索式合集**：6 库高级检索式和 Query QA 摘要，每库给 A0（对象+必需技术召回基线）、A1（三层主题式）和 B（平台专属精准式）；综述导向变体仅作补充，不把整体策略限制为 review-only。
 - **`candidate_list.csv/.md/.html` — 文献候选清单**：API 收割去重元数据（标题/作者/期刊/年份/DOI）+ OA 状态 + 可点击 DOI 链接 + 来源标注；CSV 和 Markdown 使用 UTF-8 BOM，便于 Windows 和 Excel 直接打开。
 - **`usage_guide.md/.html` — 使用说明**：每个检索式填入哪个平台的哪个输入框、预期命中量级、如何调宽/调窄、按写作类型的检索建议。
 
@@ -71,10 +72,12 @@
 ```
 QueryStrategist/
 ├── LICENSE                                  # MIT
+├── VERSION                                  # 当前正式版本
+├── BUILD_MANIFEST.json                      # 发布文件完整性清单
 ├── README.md                                # 本文件
 ├── RUN.md                                   # 运行入口与代码清单
 ├── SKILL.md                                 # 主 Skill（编排器根入口）
-├── setup_wizard/                            # Step 0  写作类型 + 配置（指令: SKILL.md）
+├── setup_wizard/                            # Step 0  写作类型 + 配置（指令: SKILL.sub.md）
 ├── scope_definer/                           # Step 1  三级关键词 + 排除项
 ├── search_strategist_v1/                    # Step 2  双通道检索（终点）
 ├── query_crafter/                           # 检索式总控（6 平台）
@@ -85,10 +88,10 @@ QueryStrategist/
 ├── cnki_query_crafter/                      # 中国知网（中文补充）
 ├── wanfang_query_crafter/                   # 万方（中文补充）
 ├── literature_harvester/                    # API 收割 + 验证（OpenAlex 收割 / Crossref 逐条验证）
-└── _shared_tools/                           # 运行、校验与发布辅助脚本
+└── _shared_tools/                           # 运行与校验脚本
 ```
 
-> 每个子模块目录均含 `SKILL.md`（本地安装形态，可直接注册为独立 Skill）及所需资源。SCP 发布包由 `python _shared_tools/scripts/build_scp_package.py --destination <以 _SCP 结尾的发布目录> --force` 显式覆盖生成；构建结果包含 `BUILD_MANIFEST.json`，不再手工同步副本。
+> `E:\QueryStrategist` 是唯一正式仓库和唯一发布源。GitHub、比赛源码包与后续 SCP 上架均应取自同一版本的本目录，不再生成或维护第二份发布副本。SCP 页面正文以根 `SKILL.md` 为来源；`README.md` 面向 GitHub 用户和比赛评审说明项目结构、运行方式与边界。正式发布内容不包含测试目录、测试数据或 Python 缓存。
 
 ---
 
@@ -116,7 +119,7 @@ QueryStrategist/
 - **交付闭环**：本工具交付「可追溯的检索策略包」——研究者可直接把检索式填入各平台、按候选清单下载文献；所有检索策略均绑定真实范围界定与收割记录。
 - **收割 ≠ 语料**：API 收割的元数据仅作候选清单，绝不自动进入下游当作全文语料；需用户自行下载验证。
 - **检索策略需平台验证**：检索式命中量级为预估，最终以各数据库实际检索结果为准；AI 不替用户做纳入决定。
-- **发布前验收**：脚本单元测试不替代真实平台验证；正式使用前仍需在 WoS、Scopus、IEEE Xplore、Google Scholar、CNKI、万方官网分别粘贴检索式，确认语法解析和命中量符合预期。
+- **发布前验收**：自动校验不替代真实平台验证；正式使用前仍需在 WoS、Scopus、IEEE Xplore、Google Scholar、CNKI、万方官网分别粘贴检索式，确认语法解析和命中量符合预期。
 - **阅读兼容性**：最终 Markdown/CSV 统一为 UTF-8 BOM，并生成内嵌样式的离线 HTML。建议普通阅读优先打开 `.html`，需要编辑或复用时再打开 `.md`。
 - **交互体验**：检索式页面支持六库标签页与一键复制；候选清单支持本地搜索、验证状态/OA/年份筛选和表头排序；所有功能均无 CDN、无外部网络依赖，关闭 JavaScript 后原始内容仍完整可读。
 - **当前边界**：本版本已经包含按写作类型调节检索策略权重；后续扩展仍须坚守「收割 ≠ 语料」与「人类把关」两条红线。

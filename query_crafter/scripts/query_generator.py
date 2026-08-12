@@ -33,6 +33,160 @@ import json
 import re
 
 
+RISKY_EXCLUSION_TERMS = {
+    "fish", "sensor", "disease", "aquaculture", "animal", "water",
+    "camera", "image", "imaging", "quality", "grading", "detection",
+}
+
+
+def classify_exclusions(scope):
+    """Return query-approved exclusions and user-facing classification notes.
+
+    Structured scopes are preferred. Legacy ``explicit_exclusions`` remains
+    backward compatible, but broad single tokens are downgraded to warnings
+    instead of being inserted into every NOT clause.
+    """
+    structured = any(
+        key in scope for key in
+        ("strong_exclusions", "soft_exclusions", "risky_exclusions", "query_exclusions")
+    )
+    if structured:
+        strong = list(scope.get("strong_exclusions") or [])
+        approved = list(
+            scope.get("query_exclusions")
+            if "query_exclusions" in scope else strong
+        )
+        soft = list(scope.get("soft_exclusions") or [])
+        risky = list(scope.get("risky_exclusions") or [])
+    else:
+        strong, soft, risky, approved = [], [], [], []
+        for raw in scope.get("explicit_exclusions", []) or []:
+            term = str(raw).strip()
+            if not term:
+                continue
+            normalized = term.strip('"').casefold()
+            if normalized in RISKY_EXCLUSION_TERMS:
+                risky.append(term)
+            elif len(normalized.split()) == 1:
+                soft.append(term)
+            else:
+                strong.append(term)
+        approved = list(strong)
+    def unique(values):
+        return list(dict.fromkeys(str(v).strip() for v in values if str(v).strip()))
+    return {
+        "strong": unique(strong),
+        "soft": unique(soft),
+        "risky": unique(risky),
+        "query": unique(approved),
+    }
+
+
+def query_exclusions(scope, chinese=False):
+    """Return exclusions approved for query generation in the target language."""
+    if chinese:
+        structured = any(
+            key in scope for key in
+            ("strong_exclusions_zh", "query_exclusions_zh")
+        )
+        if structured:
+            values = (
+                scope.get("query_exclusions_zh")
+                if "query_exclusions_zh" in scope
+                else scope.get("strong_exclusions_zh")
+            ) or []
+            return list(dict.fromkeys(str(v).strip() for v in values if str(v).strip()))
+        return list(scope.get("explicit_exclusions_zh") or []) if not any(
+            key in scope for key in
+            ("strong_exclusions", "soft_exclusions", "risky_exclusions", "query_exclusions")
+        ) else classify_exclusions(scope)["query"]
+    return classify_exclusions(scope)["query"]
+
+
+def _query_qa_status(checks):
+    statuses = {item["status"] for item in checks}
+    if "FAIL" in statuses:
+        return "FAIL"
+    if "WARNING" in statuses:
+        return "WARNING"
+    return "PASS"
+
+
+def run_query_qa(variants, scope):
+    """Run platform-neutral and platform-specific query quality checks."""
+    checks = []
+    exclusions = classify_exclusions(scope)
+    if exclusions["soft"] or exclusions["risky"]:
+        checks.append({
+            "name": "broad_exclusions",
+            "status": "WARNING",
+            "detail": {
+                "soft": exclusions["soft"],
+                "risky": exclusions["risky"],
+                "message": "宽泛排除词仅作为人工筛选提示，未自动进入 NOT。",
+            },
+        })
+    tiers = scope.get("keyword_tiers", {})
+    required = tiers.get("tier2_required_anchor") or tiers.get("required_anchor_terms")
+    if not required and tiers.get("tier2_technology_method"):
+        required = tiers.get("tier2_technology_method")
+    if not required:
+        checks.append({"name": "required_anchor", "status": "FAIL", "detail": "缺少必需技术锚点"})
+    expected_prefixes = {
+        "wos": "TS=(",
+        "scopus": "TITLE-ABS-KEY(",
+        "cnki": "SU=",
+    }
+    for platform, rows in (variants or {}).items():
+        if platform == "_meta":
+            continue
+        if isinstance(rows, str):
+            rows = [{"variant": "default", "query": rows}]
+        elif isinstance(rows, list):
+            rows = [
+                row if isinstance(row, dict) else {
+                    "variant": f"default_{index}", "query": row
+                }
+                for index, row in enumerate(rows, 1)
+            ]
+        variant_names = {str(row.get("variant") or "") for row in rows or []}
+        has_review = any(name == "review" or name.startswith("review_") for name in variant_names)
+        has_core = any(
+            name == core or name.startswith(f"{core}_")
+            for name in variant_names for core in ("broad", "topical")
+        )
+        if has_review and not has_core:
+            checks.append({
+                "name": f"review_only:{platform}", "status": "FAIL",
+                "detail": "综述变体不能替代 A0/A1 核心检索",
+            })
+        for row in rows or []:
+            query = str(row.get("query") or "")
+            label = f"{platform}:{row.get('variant', 'default')}"
+            if query.count("(") != query.count(")"):
+                checks.append({"name": f"balanced_parentheses:{label}", "status": "FAIL", "detail": "括号不闭合"})
+            if query.count('"') % 2:
+                checks.append({"name": f"balanced_quotes:{label}", "status": "FAIL", "detail": "引号不成对"})
+            if platform == "google_scholar" and len(query) > 256:
+                checks.append({"name": f"google_scholar_length:{label}", "status": "FAIL", "detail": "超过 256 字符"})
+            prefix = expected_prefixes.get(platform)
+            if prefix and prefix not in query:
+                checks.append({
+                    "name": f"platform_field:{label}", "status": "FAIL",
+                    "detail": f"缺少预期平台字段语法 {prefix}",
+                })
+            if platform == "wanfang" and not query.strip():
+                checks.append({"name": f"platform_field:{label}", "status": "FAIL", "detail": "万方检索式为空"})
+            if platform == "ieee":
+                try:
+                    _ieee_validate_query(query)
+                except ValueError as exc:
+                    checks.append({"name": f"ieee_command_search:{label}", "status": "FAIL", "detail": str(exc)})
+    if not checks:
+        checks.append({"name": "query_integrity", "status": "PASS", "detail": "六库查询通过基础完整性检查"})
+    return {"status": _query_qa_status(checks), "checks": checks}
+
+
 def _join_terms(terms, op=" OR "):
     """Join English terms; quote phrases but keep simple words lemmatizable."""
     terms = [t.strip() for t in terms if t.strip()]
@@ -799,9 +953,9 @@ def _chinese_enabled(value):
 def generate(scope, platforms=None, warnings=None):
     """Return Search A queries; Scholar uses a complementary query list."""
     tiers = scope.get("keyword_tiers", {})
-    exclusions = scope.get("explicit_exclusions", [])
+    exclusions = query_exclusions(scope)
     zh_tiers = scope.get("keyword_tiers_zh") or tiers
-    zh_exclusions = scope.get("explicit_exclusions_zh") or exclusions
+    zh_exclusions = query_exclusions(scope, chinese=True) or exclusions
     _validate_required_tiers(tiers, require_task=False)
     if scope.get("keyword_tiers_zh"):
         _validate_required_tiers(zh_tiers, "keyword_tiers_zh", require_task=False)
@@ -867,9 +1021,9 @@ def generate_variants(scope, platforms=None, warnings=None):
     多角度组合共同覆盖综述所需参考文献范围；用户自行粘贴执行并下载 PDF。
     """
     tiers = scope.get("keyword_tiers", {})
-    exclusions = scope.get("explicit_exclusions", [])
+    exclusions = query_exclusions(scope)
     zh_tiers = scope.get("keyword_tiers_zh") or tiers
-    zh_exclusions = scope.get("explicit_exclusions_zh") or exclusions
+    zh_exclusions = query_exclusions(scope, chinese=True) or exclusions
     _validate_required_tiers(tiers)
     if scope.get("keyword_tiers_zh"):
         _validate_required_tiers(zh_tiers, "keyword_tiers_zh")
@@ -993,14 +1147,21 @@ def main():
     else:
         platforms = None
     if args.variants:
-        result = generate_variants(scope, platforms)
+        warnings = []
+        result = generate_variants(scope, platforms, warnings)
         # 扁平化为可读列表
         flat = {}
         for p, vs in result.items():
             flat[p] = [{"variant": v["variant"], "label": v["label"], "query": v["query"]} for v in vs]
         payload = flat
     else:
-        payload = generate(scope, platforms)
+        warnings = []
+        payload = generate(scope, platforms, warnings)
+    meta = {
+        "exclusion_policy": classify_exclusions(scope),
+        "query_qa": run_query_qa(payload, scope),
+        "warnings": warnings,
+    }
     if args.package:
         payload = {
             "context": {
@@ -1008,10 +1169,13 @@ def main():
                 "strategy_priority": _strategy_priority(writing_type),
                 "time_span": {"start": min_year, "end": max_year},
                 "chinese_supplement": _chinese_enabled(chinese_value),
-                "platforms": list(payload.keys()),
+                "platforms": [p for p in payload if p in BUILDERS],
             },
             "queries": payload,
+            "_meta": meta,
         }
+    else:
+        payload["_meta"] = meta
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 

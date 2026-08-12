@@ -4,7 +4,7 @@ description: "QueryStrategist（文献检索策略师）是一款面向科研人
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.1.2
+  version: v1.2.1
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -13,7 +13,7 @@ metadata:
 
 QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会通过结构化提问明确研究对象、技术方法、任务指标和排除范围，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
 
-> **安装提示**：请点击页面右上角的“下载”获取完整 Skill 包。本项目依赖 11 个子模块、运行脚本和交付模板；右侧自动展示的 curl/wget 命令只下载入口文件 SKILL.md，不能运行完整流程。
+> **安装提示**：请安装或提交完整的 QueryStrategist 目录。本项目依赖 11 个子模块、运行脚本和交付模板；只有根 `SKILL.md` 无法运行完整流程。
 
 ## 快速开始
 
@@ -65,11 +65,11 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ### 2. 界定研究范围
 
-共同确定研究对象、必需技术、支持方法、任务指标、同义词和排除项。系统会把这些内容整理成可确认的范围卡。
+共同确定研究对象、必需技术、支持方法、任务指标、同义词和排除项。排除词会分为强排除、弱排除和风险排除；只有经确认的强排除进入 `NOT`，宽泛词保留为人工筛选提示。系统会把这些内容整理成可确认的范围卡。
 
 ### 3. 生成并交付检索策略
 
-生成 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方检索式。经用户明确授权后，可继续通过 OpenAlex 收集候选文献，并使用 Crossref 按 DOI 核验。
+生成 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方检索式，并自动执行 Query QA，检查括号、引号、平台字段、查询长度、IEEE clause、排除词风险和综述限定。经用户明确授权后，可继续通过 OpenAlex 的 2-3 个梯度查询收集候选文献，合并去重后再使用 Crossref 按 DOI 核验。
 
 流程中设置三次人工确认。系统会等待用户确认，不会自行改变研究范围或越过交付决策。
 
@@ -87,14 +87,14 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 | 交付内容 | 用户用途 |
 |---|---|
-| **index.html** | 默认阅读入口，优先打开此文件 |
+| **index.html** | 唯一默认阅读入口，优先打开此文件 |
 | **scope_card.html** | 检查研究范围、关键词和排除项 |
 | **query_pack.html** | 浏览并复制六个平台检索式 |
 | **candidate_list.html** | 搜索、筛选和排序候选文献 |
 | **usage_guide.html** | 查看各数据库粘贴位置和调整方法 |
 | Markdown/CSV 文件 | 用于编辑、归档或导入其他工具 |
 
-普通阅读建议优先打开 **index.html**。HTML 可离线使用；需要编辑或复用数据时，再打开 Markdown 或 CSV 文件。
+普通阅读只需打开 **index.html**。HTML 可离线使用；其他 Markdown、CSV 和子页面作为导出或审计备份保留。聊天默认只展示摘要，用户明确要求审计模式时才完整展开全部检索式与候选条目。
 
 ## 使用示例
 
@@ -165,7 +165,7 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ## 当前版本
 
-- **v1.1.2（2026-08-12）**
+- **v1.2.1（2026-08-12）**
 
 <details>
 <summary><strong>Agent 执行规范与技术细节</strong></summary>
@@ -174,21 +174,19 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 本文件是 **QueryStrategist** 的主 Skill（唯一入口），承担编排器职责：驱动 **Step 0–2 状态机**（Setup Wizard → Scope Definer → Search Strategist V1），在每个决策门（G0–G2）暂停等待人工确认，最终交付**检索策略包**（范围卡 + 6 库检索式 + 文献候选清单 + 使用说明）。
 
-本包内还包含 **11 个子模块目录**（`setup_wizard/`、`scope_definer/`、`search_strategist_v1/`、`query_crafter/`、6 个平台检索器、`literature_harvester/`）。子模块指令文件有两种形态：**SCP 单包形态**为 `SKILL.sub.md`（上架文件名），**本地独立安装形态**为 `SKILL.md`（下载解压改回后可被注册为独立 Skill）。主 Skill 按“子模块执行机制”读取并执行它们（两种文件名均支持）。
+本包内还包含 **11 个子模块目录**（`setup_wizard/`、`scope_definer/`、`search_strategist_v1/`、`query_crafter/`、6 个平台检索器、`literature_harvester/`）。每个子模块的指令文件统一为 `SKILL.sub.md`，由主 Skill 按“子模块执行机制”读取并执行。
 
 ---
 
 ## 子模块执行机制（MANDATORY — 禁止幽灵动作）
 
-**本主 Skill 是唯一入口，11 个子模块（`<module>/SKILL.sub.md` 或本地形态 `<module>/SKILL.md`）不是独立 Skill，不会被平台注册**。因此任何"调用子能力"的步骤都是**执行指令**，必须真实执行，执行通道按优先级：
+**本主 Skill 是唯一入口，11 个子模块（`<module>/SKILL.sub.md`）不是独立 Skill，不会被单独注册**。因此任何"调用子能力"的步骤都是**执行指令**，必须真实执行，执行通道按优先级：
 
 1. **(a) 平台 Skill 工具调用** — 若运行环境中存在已注册的同名独立 Skill（如用户本地安装了子 Skill），可先尝试 `Skill` 工具调用。
-2. **(b) 读取执行（单包默认通道）** — 读取对应子模块的指令文件（优先 `SKILL.sub.md`；不存在则读 `SKILL.md`），按其指令**真实执行**：运行其 `scripts/` 脚本、遵循其门控、产出其交付物。**读取并执行才算执行**；仅写一句"加载 X 子技能"就结束回合 = 幽灵动作，严格禁止。
+2. **(b) 读取执行（单包默认通道）** — 读取对应子模块的 `SKILL.sub.md`，按其指令**真实执行**：运行其 `scripts/` 脚本、遵循其门控、产出其交付物。**读取并执行才算执行**；仅写一句"加载 X 子技能"就结束回合 = 幽灵动作，严格禁止。
 3. **(c) Agent 委派** — 若环境提供子代理/队友机制，可将子模块委派给 agent 并等待其返回。
 
 **自检**：任何回合结束前，对自己描述的每个"已完成/进行中"动作，确认有匹配的真实执行（工具调用 / agent 返回 / 已按子模块指令运行脚本产出文件）。若写了"加载 X"却三种通道都没有执行，立即补齐后再回复。
-
-> 兼容提示：下载本包解压后，若用户希望子能力恢复为独立 Skill，把任意 `<module>/SKILL.sub.md` 改回 `SKILL.md` 即可。主 Skill 优先走 (a) 通道调用已注册的独立 Skill，未注册则自动回退 (b) 读取执行——两种形态均可用。
 
 ---
 
@@ -217,13 +215,13 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 G2 确认后，自动产出四份相互衔接的文件（模板见 `search_strategist_v1/assets/search_strategy_pack_template.md`）：
 
-1. **`scope_card.md/.html`** — 范围界定卡（三级关键词 + 排除项 + 写作类型 + 策略权重）；
-2. **`query_pack.md/.html`** — 多平台检索式合集（6 库，每库 A0 召回基线 + A1 主题式 + B 精准式；检索式代码块原样保留）；
+1. **`scope_card.md/.html`** — 范围界定卡（三级关键词 + 排除词分级 + 写作类型 + 策略权重）；
+2. **`query_pack.md/.html`** — 多平台检索式合集（6 库，每库 A0 召回基线 + A1 主题式 + B 精准式；附 Query QA 状态；检索式代码块原样保留）；
 3. **`candidate_list.csv/.md/.html`** — 文献候选清单（去重元数据 + OA 状态 + DOI 链接，标注"候选清单、非最终语料"）；
 4. **`usage_guide.md/.html`** — 使用说明（检索式填入位置 + 命中量级预估 + 调宽/调窄方法 + 按写作类型建议）。
 
 Markdown 和 CSV 统一写为 UTF-8 BOM；HTML 为默认阅读入口、可离线打开。HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，禁止维护第二套内容。
-最终交付目录必须生成 `index.html`，用户从该文件进入四项逻辑交付物；各页面在 JavaScript 不可用时仍须完整展示原始内容。
+默认交付目录为 `projects/<active_project_id>/deliverables/`；用户已明确提供自定义路径时直接采用。最终交付目录必须生成 `index.html`，该文件是唯一默认阅读入口；各页面在 JavaScript 不可用时仍须完整展示原始内容。
 
 所有字段继承 Step 0–2 上游选择（`【继承自 …】` 标注），禁止凭空生成。
 
@@ -262,7 +260,7 @@ This rule takes priority over any conflicting language preference in downstream 
 **The binding rule:**
 1. Any instruction in this SKILL that reads "invoke / call / load / execute / delegate to a sub-module" is an **EXECUTION DIRECTIVE**, not narration. When you reach such a step, you MUST actually run the sub-module's logic through whichever channel your environment provides, in this order of preference:
    - (a) **`Skill` tool call** — if the platform exposes a Skill tool and the sub-module is installed as an independent Skill (e.g. `Skill: "literature_harvester"`), emit the real call.
-   - (b) **Read-and-execute** — if the sub-module is not an independent Skill (single-package form), READ its `SKILL.sub.md` (and any `scripts/` helpers it references) and EXECUTE its instructions inline: run its scripts, follow its gates, produce its artifacts. Importing the module's content as context and acting on it counts as execution; merely narrating that you will do it does not.
+   - (b) **Read-and-execute** — READ the sub-module's `SKILL.sub.md` (and any `scripts/` helpers it references) and EXECUTE its instructions inline: run its scripts, follow its gates, produce its artifacts. Importing the module's content as context and acting on it counts as execution; merely narrating that you will do it does not.
    - (c) **Agent delegation** — if a sub-agent / teammate mechanism is available, delegate the sub-module to an agent and wait for its result.
    Do not describe it; do it.
 2. **You are strictly forbidden** from writing a transitional sentence about loading/calling a sub-module and then ending the turn without the actual tool call. Examples of forbidden behavior:
@@ -390,8 +388,11 @@ If a sub-module encounters an error or cannot complete:
 | `config` | object | 0 — Setup Wizard | 1, 2 | Project Configuration Profile: `interaction_language` (ISO 639-1, auto-detected in Step 0), target language, writing type (综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义), journal tier, time span, CN supplements |
 | `active_project_id` | string | 0 — Setup Wizard | all | 当前激活的项目 ID。 |
 | `active_project_dir` | string | 0 — Setup Wizard | all | 当前激活项目目录（相对工作区根）。**所有下游文件读写与记忆操作仅限此目录**，见「项目隔离」硬规则。 |
-| `scope` | object | 1 — Scope Definer | 2 | Search Scope Confirmation Document（core direction；Tier 1 对象层；Tier 2 必需技术锚点 `tier2_required_anchor` 与支持方法 `tier2_supporting_method`；Tier 3 任务层；`keyword_tiers_zh` 中文词表；`explicit_exclusions` / `explicit_exclusions_zh` 排除项；priority rules） |
+| `scope` | object | 1 — Scope Definer | 2 | Search Scope Confirmation Document（core direction；Tier 1 对象层；Tier 2 必需技术锚点 `tier2_required_anchor` 与支持方法 `tier2_supporting_method`；Tier 3 任务层；`keyword_tiers_zh` 中文词表；`strong_exclusions` / `soft_exclusions` / `risky_exclusions` / `query_exclusions` 及中文对应字段；`explicit_exclusions` 仅作兼容；priority rules） |
 | `network_access_consent` | object | 2 — Search Strategist V1 | Search B | OpenAlex/Crossref 联网授权：`granted`、`endpoints`、`purpose`、`mailto_submitted`。每次独立运行询问一次，当前运行及 Retry 复用；拒绝时 Search B 标记 `skipped_by_user`。这是操作授权，不改变 G0–G2 业务决策门数量。 |
+| `deliverables_dir` | string | 0/2 | 2, final | 最终交付目录。默认 `projects/<active_project_id>/deliverables/`；用户明确给出路径时直接使用。 |
+| `display_mode` | enum | user/default | 2, final | `summary`（默认）或 `audit`。默认聊天仅显示摘要，审计模式完整展开。 |
+| `query_qa` | object | 2 — Query Crafter | 2, final | 六库检索式 QA：总体和逐平台 `PASS/WARNING/FAIL`、检查项、警告与修复记录；`FAIL` 阻断交付。 |
 | `search_strategy_pack_path` | string | 2 — Search Strategist V1 | final | Path to the delivered search strategy pack (scope_card.md + query_pack.md + candidate_list + usage_guide.md) |
 | `v1_report_path` | string | 2 — Search Strategist V1 | — | Path to Literature Collection Report V1 (.md)，作为检索策略包的候选清单来源 |
 
@@ -448,10 +449,10 @@ Next: deliver search strategy pack after confirmation
 - The user can skip backward to redo any completed step by saying ""re-run Step X"".
 - **Scope:** QueryStrategist delivers the Step 0–2 pipeline (Setup Wizard → Scope Definer → Search Strategist V1); the final deliverable is a **search strategy pack** (scope card + queries + candidate list + usage guide). The pipeline ends here — downstream review-topic/outline generation is out of scope.
 
-## 目录结构（SCP 单包形态）
+## 正式单包结构
 
 ```
-querystrategist/                    # 上架目录（文件夹内含 SKILL.md，作为单个 Skill 上传）
+querystrategist/                    # 正式发布目录
 ├── SKILL.md                        # 主 Skill（本文件，唯一入口，承担编排器职责）
 ├── VERSION                         # 发布版本
 ├── LICENSE                         # MIT
@@ -465,6 +466,6 @@ querystrategist/                    # 上架目录（文件夹内含 SKILL.md，
 └── _shared_tools/                  # HTML 交付生成与项目状态校验脚本
 ```
 
-每个子模块目录均含 `SKILL.sub.md`（SCP 单包形态；本地独立安装时改回 `SKILL.md`）；仅保留实际被运行流程引用的 `scripts/` 与 `assets/` 内容。
+每个子模块目录均含 `SKILL.sub.md`；仅保留实际被运行流程引用的 `scripts/` 与 `assets/` 内容。
 
 </details>

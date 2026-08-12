@@ -4,16 +4,16 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.1.2
+  version: v1.2.1
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
 
-## SCP Usage
+## 子模块运行信息
 
 - **Type**: LLM-agent skill (no MCP server dependency; Phase 1-5 zero external model).
-- **Invocation**: Called by `querystrategist` (main Skill), or directly by the user.
-- **Runnable helpers**: Prompt-driven skill — no mandatory script (`scripts/` is a placeholder).
+- **Invocation**: Called through `querystrategist` (main Skill), including when the user requests a single submodule capability.
+- **Runnable helpers**: Prompt-driven skill — no mandatory helper script.
 - **Data flow**: Reads/writes the shared Pipeline Context across the Step 0-2 workflow.
 
 
@@ -54,7 +54,7 @@ Confirm receipt of the Review Scope Confirmation Document. Briefly restate the c
 > - **Search A**: I will call **Query Crafter** to generate ready-to-use advanced search queries for Web of Science, Scopus, IEEE Xplore, Google Scholar, CNKI, and Wanfang (the Chinese databases are enabled by configuration).
 > - **Search B**: With your explicit network-access consent, I will call **Literature Harvester** to harvest literature metadata from **OpenAlex** and **cross-verify each entry via Crossref by DOI** (filtering out hallucinated/mis-attributed entries — zero keys required).
 >
-> This first round focuses on **review articles** (reviews, surveys, state-of-the-art papers) to provide a comprehensive landscape for topic discovery. I will explain Search B's network access and request consent before starting it.""
+> The retrieval focus follows the writing type. For review-oriented work, the strategy prioritizes coverage and synthesis relevance, but it does not restrict all queries to review/survey document types. I will explain Search B's network access and request consent before starting it.""
 
 ### Step 1.4: 预告 Search B 引擎方案（MANDATORY，置于 Search B 启动前）
 
@@ -114,6 +114,8 @@ Query Crafter will automatically activate the appropriate platform-specific sub-
 
 Receive the compiled multi-platform query package from Query Crafter.
 
+Before continuing, inspect `_meta.query_qa`. `FAIL` blocks delivery: repair the affected platform query and rerun QA. `WARNING` may proceed only when the warning is preserved in `query_pack` and the user-facing summary. `PASS` may proceed directly. Confirm that only `query_exclusions` entered `NOT`; broad or ambiguous exclusions must remain screening notes.
+
 ### Step 3: Execute Search B — Literature Harvester
 **硬前置条件：`network_access_consent.granted == true`。** 未授权或字段缺失时，禁止调用 Literature Harvester，按 `part_b_status=skipped_by_user` 继续 Search A 与交付流程。
 
@@ -121,7 +123,7 @@ Receive the compiled multi-platform query package from Query Crafter.
 - `species_terms`：对象层词列表，对应 `--species`
 - `tech_terms`：必需技术锚点词列表，对应 `--technology`
 - `task_terms`：任务/应用层词列表，对应 `--task`
-- `exclude_terms`：排除词列表，对应 `--exclude`；无排除项则传空列表
+- `exclude_terms`：仅传已确认的 `query_exclusions`；`soft_exclusions` 与 `risky_exclusions` 只作为人工筛选提示
 - Literature time span as `min_year` / `max_year`
 - Writing type and derived search focus
 - Results limit: 20–25 per sub-query
@@ -129,7 +131,7 @@ Receive the compiled multi-platform query package from Query Crafter.
 - `network_consent`: `True`，对应 CLI `--network-consent`
 - `mailto`: **固定为空**，使用 Crossref 匿名公共池；标准主流程不得提交邮箱或其他个人信息
 
-**三层参数传递硬规则：** 当 Scope Document 提供三层词时，每个子查询必须调用 `harvest.py --network-consent --query <trace-query> --species <对象词...> --technology <技术词...> --task <任务词...> [--exclude <排除词...>]`。不得遗漏 `--network-consent`，也不得只传普通 `--query`，否则脚本会拒绝联网或不会启用 OpenAlex 三层强制共现过滤。
+**受控梯度硬规则：** 默认构造 `OA-Broad`（对象 + 核心技术）、`OA-Topical`（对象 + 核心技术 + 应用任务）和可选的 `OA-Precise`（对象 + 精准任务 + 技术锚点），写入梯度 JSON 后通过 `--gradient-file ... --per-query 25` 一次执行。先汇总、按 DOI 或标题+年份去重，再对唯一 DOI 做 Crossref 验证。不得把相同的三层强制过滤套到每个梯度查询上，否则三个查询会退化为重复请求。结果不足时先询问是否追加一次扩展查询。
 
 只有用户主动要求使用 Crossref polite pool 时，才另行说明会通过 `mailto` 提交其邮箱，并在用户明确同意后传入；此时把 `mailto_submitted` 记录为 `true`。不得把 Step 1.5 的标准授权解释为同意提交邮箱。
 
@@ -153,55 +155,31 @@ Receive the compiled harvesting + verification report from Literature Harvester.
    - `wc -c <harvest.json>` 确认文件字节数 > 0；
    - 读取 JSON 校验 `statistics` 字段（harvested / verified / unverified / dropped 计数）与 `verified` / `dropped` 数组实际长度一致。
    - 校验失败（0 字节 / 字段缺失 / 计数不符）→ 如实报告错误并按「Error Handling」提供 Retry / Skip / Abort，**不得**假装成功。
-4. **同步展示**：校验通过后，**在同一回合内**把 Part B 全量结果内联展示在聊天中（统计表 + 全部候选条目 + dropped 典型样例 + 验证汇总），**不得**以"已写入文件""稍后展示"等话术跳过展示。展示完毕后才进入 Step 4/5。
+4. **同步展示**：校验通过后，在同一回合内按当前展示模式输出结果。默认摘要模式展示统计与候选前 5 条；审计模式才展开全部候选和 dropped 样例。完整结果始终写入交付文件，不得丢失。
 
 **正确话术（任务仍在跑、但本回合必须结束时——仅此一种合法情况）**：说明"Search B 正在后台运行，预计 X 分钟，**完成后我会在本轮立即展示 Part B 全量结果**，请稍候"。其余情况一律按四段式执行，不得提前结束回合。
 
-> 关联：Step 4 的「CRITICAL OUTPUT RULE」要求所有结果内联展示、不截断、不写文件——本条是其**执行前置**：先等任务完成，再展示。
+> 关联：Step 4 定义摘要模式与审计模式；本条只要求先等待任务完成并校验，不要求默认把全部结果刷入聊天。
 
-### Step 4: Display Full Results Inline in Chat (DO NOT SAVE YET)
+### Step 4: Display Results According to the Selected Mode
 
-**⚠️ CRITICAL OUTPUT RULE:**
-All results MUST be displayed **inline in the chat message** in full detail. Do NOT summarize, do NOT truncate, do NOT say ""results saved to file"", and do NOT write any files to disk yet.
+The default `display_mode` is `summary`. Use `audit` only when the user explicitly requests complete inline output.
 
-Display the following in order:
+In summary mode, display only: retrieval topic, enabled databases, each platform's recommended starting query, Query QA status, Search B raw/deduplicated/verified statistics, the first 5 candidates, and the final `index.html` path. In audit mode, additionally display all query variants, all candidate entries, dropped examples, and complete verification statistics. If `part_b_status=skipped_by_user`, state that clearly and do not fabricate zero-result statistics.
 
-**Retrieval Context**:
-- Search Focus: Review articles (reviews, surveys, state-of-the-art papers)
-- Time Span: [Start Year] – [End Year]
-- Core Keywords: [summary of three tiers]
+### Step 5: Resolve Save Directory and Save
 
-**Part A – Manual Database Queries**:
-For each activated database, display:
-- Database name
-- ALL generated queries (A, B, C if available) in full — do not truncate
-- Usage notes for each query
+Resolve the directory before creating deliverables:
 
-**Part B – API Harvested Literature**:
-If `part_b_status=skipped_by_user`, display `Search B status: skipped_by_user（用户未授权外部 API 访问）`, do not fabricate harvesting statistics or an empty successful harvest. Otherwise display:
-- Retrieval & verification statistics table (harvested / verified / unverified / dropped counts)
-- Complete verified literature list with ALL entries — do not truncate. For each entry show: No., Title, First Author, Year, DOI (if available), Verification status
-- A short "Dropped examples" note (2–3 typical hallucinated/mis-attributed entries that Crossref verification caught — demonstrates the verification layer is working)
+1. If the user has already supplied a path, use it directly and do not ask again.
+2. Otherwise default to `projects/<active_project_id>/deliverables/` and tell the user that this directory will be used. Offer a custom directory only as an alternative.
+3. A custom directory outside the active project must be explicitly supplied or authorized by the user.
 
-**Summary Statistics**:
-- Number of databases covered
-- Number of API engines used (OpenAlex + Crossref verification)
-- Total unique verified results
-
-### Step 5: Ask for Save Directory, Then Save
-After all results are displayed inline, **ask the user for the save directory**:
-
-In Chinese if the user entered in Chinese:
-> ""以上是本次检索的全部结果。请告诉我您希望将文献采集报告和检索式保存在哪个目录下？例如：`E:\Literature_Review\V1_Results\`""
-
-In English if the user entered in English:
-> ""Above are all retrieval results. Which directory would you like me to save the Literature Collection Report and all queries to? For example: `E:\Literature_Review\V1_Results\`""
-
-**Wait for the user's reply.** Once the user provides a directory path:
+Then:
 1. Create the directory if it does not exist
 2. Save the full Literature Collection Report V1 as `literature_collection_report_v1.md` in that directory
 3. **Save a structured JSON metadata file as `literature_collection_v1_metadata.json` in the same directory** (see JSON Schema below)
-4. Confirm the save location to the user
+4. Continue to the four-piece deliverable and HTML workbench generation
 
 **⚠️ Safe File Persistence (CRITICAL, prevents the empty-report hang):**
 The V1 report Markdown is large (Part A full queries + Part B 65+ entries). Persisting it via a Bash heredoc is fragile and was the root cause of a previous multi-minute non-completion. Follow the orchestrator's **Hard Rule — Bash Sandbox Consistency & Safe File Persistence**:
@@ -212,14 +190,14 @@ The V1 report Markdown is large (Part A full queries + Part B 65+ entries). Pers
 
 **OA 状态获取（收割时直接附带，无需回查）：**
 OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_status`，取值 open/gold/green/hybrid/bronze/closed）。`harvest.py` 已通过 `select=open_access` 在收割时一次性附带，**每条记录自带 `is_oa` / `oa_status`，零额外 API 调用、零额外错误点**。
-- 不使用 `scripts/enrich_oa.py` 逐篇回查 OpenAlex open_access；当前发布包不包含该脚本或相关回查分支。
+- 不使用 `scripts/enrich_oa.py` 逐篇回查 OpenAlex open_access；当前正式版本不包含该脚本或相关回查分支。
 - 渲染规则不变：DOI 列 = `[https://doi.org/<doi>](https://doi.org/<doi>)`；OA状态列 = `OA期刊 (<oa_status>)` 当 `is_oa` 为 true，否则 `非OA期刊 (<oa_status>)`，缺失时为 `未知`。在 Part B 统计区加按来源的 OA 汇总。
 
 **Literature Collection V1 Metadata JSON Schema** (save alongside the .md report):
 
 ```json
 {
-  "report_version": "v1.1.2",
+  "report_version": "v1.2.1",
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
     "search_focus": "review-priority",
@@ -274,14 +252,14 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 
 **执行流程：**
 1. **读取上游产物**：Step 0 `project_meta.json`（写作类型 / 目标语言 / 目标期刊 / 时间跨度）、Step 1 `scope_definition.md`（三级关键词 + 排除项 + 优先级）、Step 5 保存的 `literature_collection_report_v1.md` + `literature_collection_v1_metadata.json`。
-2. **按模板落盘四项逻辑交付物**（到 Step 5 用户指定的目录）：
-   - `scope_card.md`：写作类型与策略权重、三级关键词、排除项、优先级、G0–G1 确认记录；
-   - `query_pack.md`：Part A 的已启用平台检索式合集。每条检索式必须放入独立 fenced code block，禁止放进 Markdown 表格；
+2. **按模板落盘四项逻辑交付物**（到 Step 5 已解析的 `deliverables_dir`）：
+   - `scope_card.md`：写作类型与策略权重、三级关键词、排除词分级、优先级、G0–G1 确认记录；
+   - `query_pack.md`：Part A 的已启用平台检索式合集与 Query QA 摘要。每条检索式必须放入独立 fenced code block，禁止放进 Markdown 表格；
    - `candidate_list.csv/.md`：Part B 收割的全量候选文献。表格单元格中的 `|` 必须写成 `\|`；
    - `usage_guide.md`：平台填入位置、筛选下载方法和写作类型策略权重。
 3. **规范编码并生成 HTML 工作台（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；同时生成默认入口 `index.html`、四份内容页，并给 Markdown/CSV 写入 UTF-8 BOM。检索式页提供平台标签页与复制按钮，候选清单页提供本地搜索、筛选和排序。
 4. **写后校验（缺一不可）**：确认 `index.html` 及所有 `.md/.csv/.html` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 `U+FFFD` 替换字符；HTML 含 `<meta charset="utf-8">`；无外部脚本/样式依赖；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致。任一校验失败均不得进入 G2。
-5. **显示 G2 门控**（用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号）：
+5. **完成提示与 G2 门控**：先提示“已生成检索策略工作台，请优先打开 `index.html`。四件套内容已整合在该入口中，其他文件为导出备份，通常不需要逐个查看。”然后用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号：
    - question（按交互语言）: "检索策略包已交付（范围卡 + 检索式 + 候选清单 + 使用说明）。确认完成流水线，还是需要调整？"
    - options: 「确认完成」/「需要调整」
 6. **用户确认后（G2 通过）**：输出完成总结，流水线结束。
@@ -290,10 +268,10 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 
 ## Output Format
 
-### Literature Collection Report V1 (Inline)
+### Literature Collection Report V1
 
 **Retrieval Context**:
-- Search Focus: Review articles (reviews, surveys, state-of-the-art papers)
+- Search Focus: [review-priority / precision-priority / novelty-priority / balanced]
 - Time Span: [Start Year] – [End Year]
 - Core Keywords: [summary of three tiers]
 
@@ -322,7 +300,9 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 **Retrieval & Verification Statistics**:
 | Metric | OpenAlex (Harvest) | Crossref (Verify) | Combined |
 |:---|:---|:---|:---|
-| Harvested | X | — | X |
+| Harvested raw | X | — | X |
+| Deduplicated | X | — | X |
+| Duplicates removed | X | — | X |
 | Verified | — | — | V |
 | Unverified (no DOI) | — | — | U |
 | Dropped (suspected hallucination) | — | — | D |
@@ -354,8 +334,8 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 - **CRITICAL**: Search B = **OpenAlex 收割 + Crossref 逐条验证**，零密钥，但联网前必须询问一次网络访问授权。不要询问任何 API Key / 访问池。用户拒绝时跳过 Search B，Search A 与交付继续。
 - **CRITICAL**: 验证是去幻觉核心——Crossref 按 DOI 回查比对 title（相似度≥0.8）与 year（|Δ|≤1），不通过 → `dropped`（疑似幻觉/错配）；无 DOI → `unverified`。展示时用 `verified / unverified / dropped` 三态，绝不把 `dropped` 混进候选清单。
 - **CRITICAL**: After Search A + Search B results are displayed (and Step 5 save is handled), the assistant MUST execute **Step 5.5: Deliver Search Strategy Pack**. This is the pipeline endpoint (G2). Do NOT load any downstream topic-selection module, do NOT ask the user for a PDF folder path, and do NOT offer to auto-download PDFs. Deliver the four-piece pack and stop at the G2 gate for user confirmation.
-- **CRITICAL**: Part A (all queries) and Part B (all harvested literature) MUST be inline in chat, never summarized or file-only.
-- **CRITICAL**: Do NOT save any file to disk until the user provides a save directory path in Step 5.
+- **CRITICAL**: Default chat output is a concise summary; complete queries and candidates remain in the deliverables. Expand everything inline only in explicit `audit` mode.
+- **CRITICAL**: Use the user-supplied directory when present; otherwise save to `projects/<active_project_id>/deliverables/` without forcing an extra path question.
 - This skill calls two sub-skills (Query Crafter and Literature Harvester) and merges their outputs. It does not directly generate queries or call APIs.
 - The search focus for Search Strategist V1 is `review-priority` when the Step 0 writing type is 综述; adjust per writing type (论著查准 / 开题基金新颖性).
 - The search strategy pack delivered at Step 5.5 (scope card + query pack + candidate list + usage guide) is the pipeline's final deliverable and the end of the QueryStrategist flow.

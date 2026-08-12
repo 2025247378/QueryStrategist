@@ -4,15 +4,15 @@ description: "文献自动收割器（两源版）| OpenAlex 无密钥收割主�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.1.2
+  version: v1.2.1
   keywords: [literature harvesting, OpenAlex, Crossref, API, QueryStrategist]
   triggers: [文献收割, harvester, API收割, 元数据]
 ---
 
-## SCP Usage
+## 子模块运行信息
 
 - **Type**: Pure LLM-agent skill, **zero external key required** (OpenAlex + Crossref both open APIs). Phase 1-5 zero external model; no MCP server.
-- **Invocation**: Called by `querystrategist` (main Skill), or directly by the user.
+- **Invocation**: Called through `querystrategist` (main Skill), including when the user requests a single submodule capability.
 - **Runnable helpers**: See `scripts/harvest.py` (OpenAlex harvest + Crossref verify; dependency bootstrapping via `scripts/requirements.txt`).
 - **Data flow**: Reads/writes the shared Pipeline Context across the Step 0-2 workflow.
 
@@ -40,7 +40,7 @@ python scripts/harvest.py --network-consent --query "organ-on-a-chip drug toxici
 python scripts/harvest.py --network-consent --query "..." --no-verify
 python scripts/harvest.py --network-consent --query "..." --min-year 2016 --max-year 2026
 python scripts/harvest.py --query "..." --dry-run                    # 不联网，仅检查参数/预算，无需授权
-python scripts/harvest.py --network-consent --query "..." --per-platform 30
+python scripts/harvest.py --network-consent --gradient-file search_b_queries.json --per-query 25
 python scripts/harvest.py --network-consent --query "..." --mailto you@example.com  # 仅在用户另行同意提交邮箱后使用
 
 # 方式二：手动预装（可选）
@@ -57,7 +57,7 @@ pip install -r scripts/requirements.txt         # requests
   "verified": [...],        # ✅ Crossref 验证通过（title 相似度≥0.8 且年份差≤1）→ 可信候选
   "unverified": [...],      # ⚠️ 无 DOI / 验证瞬时失败 → 保留供人工参考
   "dropped": [...],         # ❌ 验证不通过（title_mismatch / year_mismatch / doi_not_found）→ 疑似幻觉/错配，剔除
-  "statistics": {"harvested": N, "verified": N, "unverified": N, "dropped": N, "verify_enabled": true}
+  "statistics": {"harvested_raw": N, "harvested_deduplicated": N, "duplicates_removed": N, "verified": N, "unverified": N, "dropped": N, "verify_enabled": true}
 }
 ```
 每条记录字段：`title` / `authors` / `year` / `doi`（完整 URL）/ `cited_by_count` / `url` / `source` / **`is_oa`** / **`oa_status`**（open/gold/green/hybrid/bronze/closed；收割时 OpenAlex 原生附带，不再逐篇回查）。
@@ -88,7 +88,7 @@ The following inputs are provided by the calling Search Strategist:
     - Tier 3 – Application/Task: `task_terms` / CLI `--task`
 2. **Search Configuration**:
    - Time Span: start year and end year (from Project Configuration Profile)
-   - Search Focus: `review-priority` (for V1, prioritize review articles) or `all-types` (for V2, all literature types)
+   - Search Focus: `review-priority`, `precision-priority`, `novelty-priority`, or `balanced`. `review-priority` means coverage suitable for review writing, not a `review/survey` document-type-only query.
 3. **Results Limit**: Maximum number of results to return **per sub-query** (default: 20–25).
 4. **Exclusions**: `exclude_terms` / CLI `--exclude`, applied locally to title and inverted-index abstract.
 5. **network_access_consent** (required for network access): Consent state from Search Strategist. If `granted=true`, reuse it and do not ask again; otherwise follow Step 0 below before any API call.
@@ -115,7 +115,7 @@ The following inputs are provided by the calling Search Strategist:
 
 | 配置项 | 值 |
 |:---|:---|
-| 检索焦点 | Review articles / All types |
+| 检索焦点 | Review-priority / Precision-priority / Novelty-priority / Balanced |
 | 时间范围 | [Start Year] – [End Year] |
 | 数据源 | OpenAlex（收割）+ Crossref（验证） |
 | 验证策略 | 逐条 DOI 回查（title 相似度≥0.8 且 year 差≤1） |
@@ -123,28 +123,32 @@ The following inputs are provided by the calling Search Strategist:
 
 ### Step 1: 构造子查询并执行 harvest.py
 
-根据三层关键词，生成 4-5 个聚焦子查询（每个子查询必须保留对象层，并选择一对技术词+任务词）。**规则与旧版 Step 1 相同**（领域锁定、负向排除、术语具体性、综述标识等规则全部保留）。
+根据三层关键词生成默认 2-3 个受控梯度查询：
+
+- `OA-Broad`：对象 + 核心技术，用于基础召回。
+- `OA-Topical`：对象 + 核心技术 + 应用任务，用于主题相关召回。
+- `OA-Precise`：对象 + 精准任务 + 技术锚点，用于补充高相关候选；范围简单时可省略。
+
+每个查询返回 20-25 条，最多 25 条。先合并 OpenAlex 结果，再按 DOI 去重；无 DOI 时按规范化标题与年份去重。**只有去重完成后**，才对有 DOI 的唯一候选逐条调用 Crossref。默认查询不足时先报告实际结果，再询问用户是否追加一次扩展查询，不得无限制追加 API 调用。综述导向通过梯度覆盖和排序体现，不得把所有查询限制为 `review` 或 `survey`。
 
 然后为每个子查询构造 `harvest.py` 命令行：
 
 ```bash
 python scripts/harvest.py \
-  --query "YOLO object detection cat freshness" \
-  --species cat dog \
-  --technology YOLO "object detection" \
-  --task freshness grading \
-  --exclude disease "water quality" \
+  --gradient-file search_b_queries.json \
   --network-consent \
   --min-year 2016 --max-year 2026 \
-  --per-platform 20 \
-  --out harvest_q1.json
+  --per-query 25 \
+  --out harvest.json
 ```
+
+`search_b_queries.json` contains two or three objects shaped as `{"name": "OA-Broad", "query": "..."}`. Do not combine `--gradient-file` with a single strict three-tier filter that would make every gradient execute the same query. Use `--species/--technology/--task` only for the single-query compatibility path.
 
 **执行策略**：所有子查询独立 try/except，单个失败仅记录该子查询错误，其余照常；全部失败才报告整体失败。验证环节对每条记录独立容错，单条验证瞬时失败标记 `verify_error` 保留，不武断判死。
 
 ### Step 2: 汇总并展示收割+验证报告
 
-读取各子查询的 JSON 输出，汇总统计，输出格式见下方 Output Format。**向用户明确说明**：`verified` 为可信候选；`dropped` 为验证不过的疑似幻觉条目（可列出几条典型 example 供用户感知验证在起作用）；`unverified` 为无 DOI 条目，需人工判断。
+读取统一 JSON 输出并展示原始收割数、去重后数量、去重移除数以及 verified / unverified / dropped 统计。**向用户明确说明**：`verified` 为可信候选；`dropped` 为验证不过的疑似错配条目；`unverified` 为无 DOI 或瞬时验证失败条目，需人工判断。
 
 ### 降级路径：脚本不可用时的手工模式
 
@@ -161,7 +165,9 @@ python scripts/harvest.py \
 
 | Metric | Value |
 |:---|:---:|
-| Harvested (OpenAlex) | N |
+| Harvested raw (OpenAlex) | N |
+| Deduplicated candidates | N |
+| Duplicates removed | N |
 | Verified (Crossref match) | N |
 | Unverified (no DOI / verify error) | N |
 | Dropped (suspected hallucination) | N |

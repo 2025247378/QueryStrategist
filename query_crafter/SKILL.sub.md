@@ -4,15 +4,15 @@ description: "检索式构建总控 | 自动调用全部6个平台子skill（WoS
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.1.2
+  version: v1.2.1
   keywords: [search query, database, orchestration, QueryStrategist]
   triggers: [检索式, query crafter, 检索式总控, 多平台检索]
 ---
 
-## SCP Usage
+## 子模块运行信息
 
 - **Type**: LLM-agent skill (no MCP server dependency; Phase 1-5 zero external model).
-- **Invocation**: Called by `querystrategist` (main Skill), or directly by the user.
+- **Invocation**: Called through `querystrategist` (main Skill), including when the user requests a single submodule capability.
 - **Runnable helpers**: `scripts/query_generator.py` 可直接执行，用于生成并校验六库检索式。
 - **Data flow**: Reads/writes the shared Pipeline Context across the Step 0-2 workflow.
 
@@ -44,10 +44,10 @@ python scripts/query_generator.py --scope scope.json --package --writing-type "�
 - `broad` / A0 召回基线：对象 + 必需技术；不加任务、排除项、年份和文献类型。
 - `topical` / A1 主题检索：对象 + 必需技术 + 任务；允许应用明确排除项。
 - `precise` 精准检索（高精确）：调用各平台专属收紧规则；不能把所有平台简化为同一条“三层 AND”模板。具体规则以各平台子 Skill 和输出标签为准。
-- `review` 综述导向：A1 主题式 + 各库 review/survey 限定。
+- `review` 综述导向补充：A1 主题式 + 各库 review/survey 限定；不得替代 A0/A1。
 - **Google Scholar 特例**：A0 与 A1 分别生成不超过 6 条互补短查询，按分组序号配对，禁止三层笛卡尔积和静默截断；A0 省略排除项。
 - **IEEE 特例**：使用 Command Search 官方语法。A0 为对象+技术的 All Metadata 召回基线；A1 为对象+技术+任务的主题式；B 仅在题名中锁定对象+技术，不强迫任务词也出现在题名；C 仅在输入真实会议/出版物名称时生成；D 输出技术层与任务层的 `NEAR/ONEAR`；E 为综述导向。对象层自动补充重复出现的中心词（如多个复合短语中的 `fish`），也可读取 `tier1_recall_anchor`。25-term 限制按单个连续 search clause 校验。
-- **中文词表与排除项**：CNKI/万方优先读取 `keyword_tiers_zh` / `explicit_exclusions_zh`；缺失时回退主词表并报警。其余平台经 `EXCLUSION_EN_MAP` 处理中文排除描述。
+- **中文词表与排除项**：CNKI/万方优先读取 `keyword_tiers_zh` / `query_exclusions_zh`；旧结构兼容 `explicit_exclusions_zh`。缺失时回退主词表并报警。其余平台经 `EXCLUSION_EN_MAP` 处理已确认的中文排除描述。
 
 输出可直接粘贴进各库高级检索框。零依赖，可独立运行。使用 --package 时，输出包含 context 与 queries 两部分；时间范围作为各数据库筛选说明的结构化上下文保存，不强行拼入不兼容的平台语法。
 
@@ -67,7 +67,7 @@ You are an expert literature retrieval strategist who coordinates a team of data
 1. **Review Scope Confirmation Document** (from Scope Definer), which includes:
    - Core Research Direction
    - Keyword Tiers (Species/Object, Technology/Method, Application/Task)
-   - Explicit Exclusions
+   - Exclusion policy: `strong_exclusions`, `soft_exclusions`, `risky_exclusions`, and the confirmed `query_exclusions`
    - Suggested Literature Priority
 2. **Project Configuration Profile** (from Setup Wizard), which specifies:
    - Target Language (English / 简体中文)
@@ -92,7 +92,7 @@ You have access to the following platform-specific Query Crafter sub-skills. Eac
 ### Step 1: Analyze the Input
 Parse the Review Scope Confirmation Document and Project Configuration Profile to determine:
 - The three keyword tiers (Species, Technology, Application)
-- Any explicit exclusions
+- The exclusion classification and the confirmed `query_exclusions`
 - The literature time span (start / end)
 - The writing type and its strategy weighting
 - Whether Chinese-Language Supplement is enabled
@@ -109,8 +109,8 @@ Based on the analysis, determine which sub-skills to activate:
 For each activated sub-skill, prepare a standardized input package containing:
 - Three keyword tiers (Species, Technology, Application)
 - Optional object/task recall anchors (`tier1_recall_anchor` / `tier3_recall_anchor`), required technology anchors (`tier2_required_anchor`), and supporting methods (`tier2_supporting_method`)
-- Chinese database tiers (`keyword_tiers_zh`) and Chinese exclusions (`explicit_exclusions_zh`) when CNKI/Wanfang are enabled
-- Exclusion keywords (if any)
+- Chinese database tiers (`keyword_tiers_zh`) and confirmed Chinese query exclusions (`query_exclusions_zh`) when CNKI/Wanfang are enabled
+- Only `query_exclusions` may be passed into platform query generators. `soft_exclusions` and `risky_exclusions` remain screening notes and warnings; they must not be converted mechanically into `NOT`.
  - Literature time span (start / end)
  - Writing type (review, research, thesis, proposal, grant, report, or custom)
  - Search focus: derived from writing type (review-priority, precision-priority, novelty-priority, or balanced)
@@ -119,17 +119,27 @@ For each activated sub-skill, prepare a standardized input package containing:
 ### Step 4: Delegate and Compile
 **⚠️ CRITICAL (No Phantom Actions):** "Call each activated sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue a `Skill` tool call for EACH activated platform sub-skill (e.g. `Skill: "wos_query_crafter"`, `Skill: "scopus_query_crafter"`, …) — do NOT merely say "now calling the sub-skills" and stop. Call each activated sub-skill with its input package. Wait for all sub-skills to return their outputs. Compile all generated queries into a single organized report.
 
-### Step 5: Output the Multi-Platform Query Package
+### Step 5: Run Query QA and Output the Multi-Platform Query Package
+
+Run the shared Query QA after all platform variants are compiled. The checks must cover balanced parentheses and quotes, valid platform field syntax, Google Scholar length, IEEE clause limits, over-broad exclusions, required technology anchors, and accidental `review-only` narrowing. Record the result in `_meta.query_qa` with one of these statuses:
+
+- `PASS`: directly usable.
+- `WARNING`: usable, but the listed caveats must be shown to the user.
+- `FAIL`: do not deliver the affected query; repair and rerun QA first.
+
+Also include `_meta.exclusion_policy`, showing which exclusions were accepted into `NOT` and which were downgraded to screening notes. A review/survey variant is an optional complementary query for review-oriented work; it must never replace A0/A1 or make the whole strategy review-only.
+
 Present the compiled queries, grouped by database. For each database, include:
 - The ready-to-use search query
 - Brief usage notes (sorting tips, filter suggestions)
 - The search focus context (review-priority or all-types)
+- Query QA status and warnings
 
 ## Output Format
 
 ### Multi-Platform Search Query Package
 
-**Search Context**: [Review-priority for V1 / All literature types for V2]
+**Search Context**: [review-priority / precision-priority / novelty-priority / balanced]
 **Time Span**: [Start Year] – [End Year]
 
 ---

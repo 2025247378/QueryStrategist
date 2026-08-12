@@ -4,16 +4,16 @@ description: "WoS检索式构建器 | 将三级关键词转化为 Web of Science
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.1.2
+  version: v1.2.1
   keywords: [Web of Science, search query, bibliographic, QueryStrategist]
   triggers: [WoS, web of science, 检索式]
 ---
 
-## SCP Usage
+## 子模块运行信息
 
 - **Type**: LLM-agent skill (no MCP server dependency; Phase 1-5 zero external model).
-- **Invocation**: Called by `querystrategist` (main Skill), or directly by the user.
-- **Runnable helpers**: Prompt-driven skill — no mandatory script (`scripts/` is a placeholder).
+- **Invocation**: Called through `querystrategist` (main Skill), including when the user requests a single submodule capability.
+- **Runnable helpers**: Prompt-driven skill — no mandatory helper script.
 - **Data flow**: Reads/writes the shared Pipeline Context across the Step 0-2 workflow.
 
 

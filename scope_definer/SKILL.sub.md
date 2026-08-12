@@ -4,16 +4,16 @@ description: "综述范围界定器 | 将研究方向收敛为三级关键词体
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.1.2
+  version: v1.2.1
   keywords: [literature search, scoping, keyword tiers, exclusion criteria, QueryStrategist]
   triggers: [综述范围, scope, 界定, 关键词, 排除项]
 ---
 
-## SCP Usage
+## 子模块运行信息
 
 - **Type**: LLM-agent skill (no MCP server dependency; Phase 1-5 zero external model).
-- **Invocation**: Called by `querystrategist` (main Skill), or directly by the user.
-- **Runnable helpers**: Prompt-driven skill — no mandatory script (`scripts/` is a placeholder).
+- **Invocation**: Called through `querystrategist` (main Skill), including when the user requests a single submodule capability.
+- **Runnable helpers**: Prompt-driven skill — no mandatory helper script.
 - **Data flow**: Reads/writes the shared Pipeline Context across the Step 0-2 workflow.
 
 
@@ -76,7 +76,12 @@ Compile and output the document from the user's answers in Step 2, then present 
  - Tier 2 Supporting Method: [analysis/algorithm terms that cannot replace the required anchor]
  - Tier 3 – Application/Task: [keywords]
  - Tier 3 Recall Anchor (optional): [standalone task concepts for sparse engineering databases, e.g. quality, freshness, grading]
-- **Explicit Exclusions**: [only what the user explicitly selected]
+ - **Exclusion Policy**:
+   - `strong_exclusions`: [明确短语，可进入 NOT]
+   - `soft_exclusions`: [宽泛词，仅作为人工筛选提示]
+   - `risky_exclusions`: [高风险宽泛词，默认不进入检索式，需再次确认]
+   - `query_exclusions`: [用户最终批准进入 NOT 的词]
+ - **Explicit Exclusions**: [兼容字段；等于 query_exclusions]
 - **Chinese Keyword Tiers** (when Chinese supplement is enabled): [independent Chinese Tier 1 / Required Anchor / Supporting Method / Tier 3]
 - **Chinese Explicit Exclusions** (when Chinese supplement is enabled): [Chinese equivalents confirmed by the user]
 - **Suggested Literature Priority**: (based on configuration) e.g., English empirical > English reviews > Chinese empirical > Chinese reviews
@@ -88,6 +93,8 @@ Compile and output the document from the user's answers in Step 2, then present 
 - Tier 1 must retain precise domain phrases and at least one standalone recall anchor. For example, `aquaculture fish`, `farmed fish`, and `fish fillet` do not replace the generic anchor `fish`; include `fish` explicitly or record it as `tier1_recall_anchor`. The anchor broadens platform wording only and does not change the user-confirmed object scope.
 - The output must be passed in its entirety to Search Strategist V1 (Step 2).
 - Scope content is **determined by the user through targeted questions (Step 2)**, then structured by the assistant — not inferred by the assistant and merely rubber-stamped at G1. Use `AskUserQuestion`（无此工具则聊天内编号列表）in Step 2 to co-determine the substantive dimensions (bundle related questions into one call; `multiSelect` for sub-tasks/exclusions), and again at the G1 gate to confirm. Do NOT add "(Recommended)" labels to any option. Do NOT pre-fill exclusions the user did not explicitly choose.
+- 排除词必须先分级再进入检索式：明确短语归入 `strong_exclusions`；可能误杀相关文献的宽泛词归入 `soft_exclusions`；`fish`、`sensor`、`disease`、`aquaculture` 等单个中心词默认归入 `risky_exclusions`，不得自动进入 NOT。只有用户确认后的 `query_exclusions` 才能传给 Query Crafter。
+- 分类结果必须向用户展示并确认：例如“以下排除词过宽，默认仅作为筛选提示而不写入 NOT：fish, sensor。是否批准其中某些词进入 NOT？”
 - At the end of the output, confirm the scope before proceeding (G1 gate), via `AskUserQuestion`（无此工具则聊天内列出「1. 确认，继续 / 2. 需要调整」请用户回复编号）:
   - **question** (adapt to user's language):
     - Chinese: "以下是根据你的选择整理的研究范围文档，请确认是否正确？确认后将进入检索策略（Search Strategist V1）。"
