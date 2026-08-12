@@ -309,7 +309,7 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
    - `candidate_list.csv/.md`：Part B 收割的全量候选文献。表格单元格中的 `|` 必须写成 `\|`；
    - `usage_guide.md`：平台填入位置、筛选下载方法和写作类型策略权重。
 3. **规范编码并生成 HTML 工作台（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；同时生成默认入口 `index.html`、四份内容页，并给 Markdown/CSV 写入 UTF-8 BOM。检索式页提供平台标签页与复制按钮，候选清单页提供本地搜索、筛选和排序。
-4. **写后校验（缺一不可）**：确认 `index.html` 及所有 `.md/.csv/.html` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 U+FFFD（`�`）；HTML 含 `<meta charset="utf-8">`；无外部脚本/样式依赖；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致。任一校验失败均不得进入 G2。
+4. **写后校验（缺一不可）**：确认 `index.html` 及所有 `.md/.csv/.html` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 `U+FFFD` 替换字符；HTML 含 `<meta charset="utf-8">`；无外部脚本/样式依赖；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致。任一校验失败均不得进入 G2。
 5. **显示 G2 门控**（用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号）：
    - question（按交互语言）: "检索策略包已交付（范围卡 + 检索式 + 候选清单 + 使用说明）。确认完成流水线，还是需要调整？"
    - options: 「确认完成」/「需要调整」

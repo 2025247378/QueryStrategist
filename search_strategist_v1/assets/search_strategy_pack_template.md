@@ -9,7 +9,7 @@
 
 1. 输出默认入口 `index.html`，以及 `scope_card.md/.html`、`query_pack.md/.html`、`candidate_list.csv/.md/.html`、`usage_guide.md/.html`。
 2. HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，不得维护第二套内容。
-3. Markdown 和 CSV 写为 UTF-8 BOM；所有文本严格 UTF-8 解码，不得出现 U+FFFD（`�`）。
+3. Markdown 和 CSV 写为 UTF-8 BOM；所有文本严格 UTF-8 解码，不得出现 `U+FFFD` 替换字符。
 4. 最终文件使用 `[已验证]`、`[待人工核验]`、`[已剔除]`、`[注意]` 等纯文本状态，不使用 Emoji。
 5. 检索式必须放在 fenced code block 中，不得放进 Markdown 表格；渲染前后逐字一致。
 
