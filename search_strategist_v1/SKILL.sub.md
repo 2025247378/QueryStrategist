@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.2.1
+  version: v1.3.1
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -96,6 +96,7 @@ Confirm receipt of the Review Scope Confirmation Document. Briefly restate the c
 - **允许**：进入 Step 2 + Step 3，可并行执行 Search A 与 Search B。
 - **拒绝**：只进入 Step 2；禁止调用 Literature Harvester、禁止发出任何 OpenAlex/Crossref 请求。记录 `network_access_consent.granted=false` 与 `part_b_status=skipped_by_user`，然后继续交付 Search A 和检索策略包。
 - 该询问是外部网络操作授权，不是 API Key/访问池询问，也不新增 G0–G2 业务决策门。
+- **授权边界**：忽略 G0 配置卡中任何历史版本遗留的“是否联网”“稍后授权”或预测值；它们均不构成授权。有效授权只能由本 Step 1.5 在 Search B 启动前取得。`search_a_all`、`single_platform` 和 `adjust_existing` 直接模式不得进入本步骤。
 
 ### Step 2: Execute Search A — Query Crafter
 **⚠️ CRITICAL (No Phantom Actions):** "Invoke the Query Crafter sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue the `Skill` tool call for `query_crafter` in this turn — do NOT merely write "loading Query Crafter" and stop. Invoke the **Query Crafter** sub-skill with the following parameters:
@@ -197,7 +198,7 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 
 ```json
 {
-  "report_version": "v1.2.1",
+  "report_version": "v1.3.1",
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
     "search_focus": "review-priority",

@@ -4,7 +4,7 @@ description: "综述范围界定器 | 将研究方向收敛为三级关键词体
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.2.1
+  version: v1.3.1
   keywords: [literature search, scoping, keyword tiers, exclusion criteria, QueryStrategist]
   triggers: [综述范围, scope, 界定, 关键词, 排除项]
 ---

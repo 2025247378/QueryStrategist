@@ -4,7 +4,7 @@ description: "文献检索项目预检配置向导 | 锁定写作类型（综述
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.2.1
+  version: v1.3.1
   keywords: [literature search, configuration, setup wizard, writing type, QueryStrategist]
   triggers: [文献检索配置, 检索设置, 配置写作类型, setup, 开始配置]
 ---
@@ -128,6 +128,8 @@ None. The user simply invokes this skill to begin the configuration dialogue.
   "project_id": "<id>",
   "title": "<英文标题>",
   "summary": "<一句话中文简介（含类型/期刊/时间/语言）>",
+  "research_direction": "<用户原文 / null>",
+  "research_direction_source": "<user_provided / not_provided>",
   "created_at": "YYYY-MM-DD",
   "updated_at": "YYYY-MM-DD",
   "pipeline_step": "<当前 Step 文本>",
@@ -148,6 +150,22 @@ None. The user simply invokes this skill to begin the configuration dialogue.
 
 **项目 ID 命名**：`<主题缩写>_<YYYYMMDD>`（缩写 2–4 个小写单词，无空格），例如 `graph_neural_network_20260801`、`llm_survey_20260801`。
 
+### Step 0.55：入口预填与 G0 前置条件（MANDATORY）
+
+本模块只处理完整流水线的 `full_pipeline` 与 `full_pipeline_with_direction`。`search_a_all`、`single_platform` 和 `adjust_existing` 直接模式由主 Skill 路由到 Query Crafter/平台构建器，不得进入 Setup Wizard。
+
+**带方向启动的预填边界：**
+
+- 若入口已经包含研究方向，只保存用户原文为 `research_direction`，并记录 `research_direction_source: user_provided`；Step 1 Scope Definer 直接复用，不再询问同一句方向。
+- 研究方向不是配置授权。不得据此自动决定或组合填写 `target_language`、`target_journal`、`writing_type`、`target_journal_tier`、`literature_time_span`、`chinese_language_supplement`、`industry_report_supplement`。
+- 禁止输出“建议配置卡 + G0”来替代 Step 2 的逐项询问。即使建议看似合理，也只能在用户选择“由 AI 建议”的选项后提出，并在 G0 前获得用户明确确认。
+- Search B 联网授权不属于 Step 0 配置项，不得出现在 G0 配置卡中，也不得以“稍后执行/暂不执行”的建议值预填。授权只能在 Search Strategist V1 即将启动 Search B 时单独询问。
+
+**字段来源：** 每个配置字段记录 `user_provided`、`user_selected` 或 `system_suggested_confirmed`。`system_suggested` 但未经用户确认的值不得写入正式配置。
+
+**G0 硬前置条件：** 所有必填项和实际展示的可选项均已获得用户答复，条件分支已经执行，配置来源可追溯。任一条件不满足时继续逐项询问，不得展示 G0。
+
+
 ### Step 0.6: 固定话术脚本（MANDATORY — 逐字输出，禁止润色）
 
 **本步骤定义整个配置流程中所有面向用户的话术，是演示/评审/日常使用逐字一致性的唯一权威来源。以下话术必须逐字输出，禁止改写、扩展、润色、合并或删减。**
@@ -165,6 +183,11 @@ None. The user simply invokes this skill to begin the configuration dialogue.
   > "Welcome to QueryStrategist! Before we dive into your research direction, let's lock in a few foundational settings. These choices will shape your literature search strategy. I'll walk you through them one at a time."
 - 其他语言：按 `interaction_language` 直译上述两版中的任一版（保持含义与结构完全一致）。
 
+**A1B — 已提供研究方向确认语**（仅 `full_pipeline_with_direction`，紧接 A1 输出）：
+- 中文：已记录您的研究方向：`<research_direction>`。后续范围界定将直接使用该方向，不需要您重复描述；其余基础配置仍将逐项确认。
+- 英文：Your research direction has been recorded: `<research_direction>`. Scope Definer will reuse it without asking you to repeat it; the remaining foundational settings will still be confirmed one at a time.
+- 其他语言：按 `interaction_language` 直译。
+
 **A2 — 提问确认语**（Step 2 每项提问前输出；`<第 N 项>` / `<配置项名称>` 替换为实际序号与名称）：
 - 中文：接下来是第 `<第 N 项>` 项：`<配置项名称>`。选择后我会说明它对后续检索的影响。
 - 英文：Next is item `<第 N 项>`: `<配置项名称>`. After you choose, I'll explain how it affects the search strategy.
@@ -181,10 +204,10 @@ None. The user simply invokes this skill to begin the configuration dialogue.
 **A5 — 每项配置影响说明**：Step 2 各条目 `Impact` 字段中的固定影响说明必须**逐字呈现**（已内嵌在各条目中），禁止改写、缩写或自行概括。
 
 ### Step 1: Initiate the Session
-Greet the user using **话术 A1**（见 Step 0.6；按 `interaction_language` 输出对应语言版本，逐字输出，禁止润色）。
+Greet the user using **话术 A1**（见 Step 0.6；按 `interaction_language` 输出对应语言版本，逐字输出，禁止润色）。若入口已包含研究方向，紧接着输出 **话术 A1B**，只确认已记录方向，不得附带任何配置建议，然后进入 Step 2 第 1 项。
 
 ### Step 2: Configuration Questions
-Present the following dimensions one at a time. **Before each item, output 话术 A2**（见 Step 0.6，替换 `<第 N 项>` 与 `<配置项名称>`）。For each, clearly list the options and explain how the choice affects downstream steps — **the `Impact` lines below are 话术 A5 and MUST be output verbatim (逐字输出，禁止改写)**. **Use `AskUserQuestion` to present options（环境无此工具时降级为聊天内编号列表，请用户回复编号）. Do NOT add "(Recommended)" labels to any option.** **Wait for the user's response before proceeding.**
+Present the following dimensions one at a time. **Before each item, output 话术 A2**（见 Step 0.6，替换 `<第 N 项>` 与 `<配置项名称>`）。For each, clearly list the options and explain how the choice affects downstream steps — **the `Impact` lines below are 话术 A5 and MUST be output verbatim (逐字输出，禁止改写)**. **Use `AskUserQuestion` to present options（环境无此工具时降级为聊天内编号列表，请用户回复编号）. Do NOT add "(Recommended)" labels to any option.** **Wait for the user's response before proceeding.** A supplied research direction only fills `research_direction`; it does not answer any item below. Never batch-infer the remaining values or skip directly to G0.
 
 1. **Target Language (Mandatory)**
    - Options: `English` / `简体中文`
@@ -226,7 +249,9 @@ Present the following dimensions one at a time. **Before each item, output 话�
    - Impact（A5 逐字）: 这决定检索策略是否包含行业白皮书、市场分析报告及政府/国际组织统计数据的专项检索。Controls whether specialized searches for white papers, market reports, and government/international statistics are included.
 
 ### Step 3: Confirm the Configuration
-After all questions are answered, present a **Project Configuration Profile** in a clean, structured format. Then confirm via `AskUserQuestion`（无此工具时在聊天内列出「确认，继续 / 需要修改」选项请用户回复）with the following parameters:
+Before displaying G0, verify that every applicable field has a user-confirmed value and a valid source (`user_provided`, `user_selected`, `system_suggested_confirmed`, `detected_from_current_session`, or `derived_from_confirmed_journal`; `not_provided` is valid only for optional fields). A research direction alone never satisfies this prerequisite. The G0 summary must not contain Search B network consent or an inferred “will connect later” value.
+
+After all questions are answered, present a **Project Configuration Profile** in a clean, structured format and include a compact source marker for each selection. Then confirm via `AskUserQuestion`（无此工具时在聊天内列出「确认，继续 / 需要修改」选项请用户回复）with the following parameters:
 
 - **question**（话术 A3，按 `interaction_language` 输出对应语言版本，逐字输出）:
   - Chinese: "以上是您的项目配置摘要。请确认是否正确？"
@@ -247,33 +272,49 @@ Once confirmed (G0), inform the user using **话术 A4**（见 Step 0.6；按 `i
 At the end of the session, output the following profile. This profile will be referenced by all downstream skills.
 
 **Project Configuration Profile**
-| Dimension | Selection |
-| :--- | :--- |
-| Interaction Language | [ISO 639-1 code, e.g. zh / en / ja / fr] |
-| Target Language | [selected] |
-| Target Journal | [journal name / 暂未确定] |
-| Author Guidelines Path | [PDF path / N/A] |
-| Writing Type | [selected] |
-| Target Journal Tier | [selected] |
-| Literature Time Span | [selected] |
-| Chinese-Language Supplement | [selected] |
-| Industry Report Supplement | [selected] |
+| Dimension | Selection | Source |
+| :--- | :--- | :--- |
+| Research Direction | [entry topic / 待 Step 1 提供] | [user_provided / not_provided] |
+| Interaction Language | [ISO 639-1 code, e.g. zh / en / ja / fr] | [detected_from_current_session] |
+| Target Language | [selected] | [user_selected / system_suggested_confirmed] |
+| Target Journal | [journal name / 暂未确定] | [user_provided / user_selected] |
+| Author Guidelines Path | [PDF path / N/A] | [user_provided / user_selected] |
+| Writing Type | [selected] | [user_selected] |
+| Target Journal Tier | [selected / journal-directed] | [user_selected / derived_from_confirmed_journal] |
+| Literature Time Span | [selected] | [user_selected / system_suggested_confirmed] |
+| Chinese-Language Supplement | [selected] | [user_selected] |
+| Industry Report Supplement | [selected] | [user_selected] |
 
 **持久化字段规范（下游唯一读取口径）**：G0 通过后，同时写入项目目录下的 `project_meta.json` 与 `pipeline_state/config.json`。`literature_time_span` 必须保存为结构化年份对象；若用户选择“近 5 年/近 10 年”，先按运行当天年份计算并把起止年份一并保存。下游模块不得只读取展示用的中文标签。
 
 ```json
 {
+  "research_direction": "水产养殖鱼类光谱成像品质鉴定与规格分级",
+  "research_direction_source": "user_provided",
   "interaction_language": "zh",
   "target_language": "简体中文",
   "target_journal": "暂未确定",
+  "author_guidelines_path": null,
   "writing_type": "综述",
+  "journal_tier": "SCI Q1/Q2",
   "literature_time_span": {
     "label": "近 10 年",
     "start": 2016,
     "end": 2026
   },
   "chinese_language_supplement": true,
-  "industry_report_supplement": false
+  "industry_report_supplement": false,
+  "field_sources": {
+    "interaction_language": "detected_from_current_session",
+    "target_language": "user_selected",
+    "target_journal": "user_selected",
+    "author_guidelines_path": "not_provided",
+    "writing_type": "user_selected",
+    "journal_tier": "user_selected",
+    "literature_time_span": "user_selected",
+    "chinese_language_supplement": "user_selected",
+    "industry_report_supplement": "user_selected"
+  }
 }
 ```
 

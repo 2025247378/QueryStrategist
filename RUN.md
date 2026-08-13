@@ -1,11 +1,11 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：v1.2.1（以根目录 VERSION 为准）
+版本：v1.3.1（以根目录 VERSION 为准）
 
 ## 快速开始
 
 1. **入口**：对任意支持 Skill 的 Agent 说「**开始文献检索**」或「**Start QueryStrategist**」。
-2. **Step 0**：Setup Wizard 配置写作类型（综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义）+ 目标语言 + 目标期刊 + 时间跨度 + 中文补充（G0 确认）。
+2. **Step 0**：Setup Wizard 逐项配置写作类型（综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义）+ 目标语言 + 目标期刊 + 时间跨度 + 中文补充（G0 确认）。入口已提供研究方向时只记录并复用方向，不得代填其他配置或直接跳到 G0。
 3. **Step 1**：Scope Definer 通过结构化提问收敛为三级关键词体系（对象层 + 必需技术锚点/支持方法 + 任务层）+ 中英文排除词分级 + 优先级（G1 确认）。只有确认的强排除进入 `NOT`。
 4. **Step 2**：Search Strategist V1 双通道 —— Search A（六库 A0/A1/B 与 Query QA，`FAIL` 必须修复）+ Search B（联网授权后执行 2-3 个 OpenAlex 梯度查询，每个 20-25 条，合并去重后再由 Crossref 验证）→ 交付**检索策略包**。拒绝联网授权时只跳过 Search B。默认目录为 `projects/<active_project_id>/deliverables/`，默认只在聊天展示摘要，并优先打开唯一入口 `index.html`；审计模式才完整展开。
 

@@ -4,7 +4,7 @@ description: "QueryStrategist（文献检索策略师）是一款面向科研人
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.2.1
+  version: v1.3.1
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -39,11 +39,11 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 | 你的需求 | 建议表达 | 得到的结果 |
 |---|---|---|
-| 完成一次系统检索 | 开始文献检索 | 范围卡、六库检索式、候选清单和使用说明 |
-| 已有明确研究方向 | 开始文献检索，我的研究方向是：…… | 自动带入研究方向并继续配置 |
-| 只生成六库检索式 | 只启动 Search A，为……生成六库检索式 | 不访问 OpenAlex/Crossref，只生成检索式 |
-| 只生成某个平台 | 为……生成 IEEE Xplore 检索式 | 只输出指定平台的检索方案 |
-| 调整已有检索式 | 帮我调宽/调窄以下检索式：…… | 输出修改后的检索式和调整理由 |
+| 完成一次系统检索 | 开始文献检索 | 检索策略包：范围卡、六库检索式、候选清单和使用说明 |
+| 已有明确研究方向 | 开始文献检索，我的研究方向是：…… | 自动带入研究方向且不再重复询问，并继续逐项配置 |
+| 只生成六库检索式 | 只启动 Search A，为……生成六库检索式 | 六库 A0/A1/B 检索式、使用说明和 Query QA（不联网） |
+| 只生成某个平台 | 为……生成 IEEE Xplore 检索式 | 指定平台的分层检索式、使用说明和 Query QA |
+| 调整已有检索式 | 帮我调宽/调窄以下检索式：…… | 原式诊断、修改结果、调整理由和 Query QA |
 
 ## 使用前准备
 
@@ -165,7 +165,7 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ## 当前版本
 
-- **v1.2.1（2026-08-12）**
+- **v1.3.1（2026-08-13）**
 
 <details>
 <summary><strong>Agent 执行规范与技术细节</strong></summary>
@@ -190,11 +190,17 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ---
 
-## 触发方式
+## 触发方式与入口路由（MANDATORY）
 
-- **完整流水线**：对任意支持 Skill 的 Agent 说「**开始文献检索**」或「**Start QueryStrategist**」，即进入本主 Skill 驱动的 Step 0–2 状态机。
-- **直接给方向**：「**开始文献检索，我的研究方向是：[topic]**」——主 Skill 将方向预填给 Step 0 与 Step 1，不再要求用户复述。
-- **单步使用**：若用户只想用某个子能力（如只生成某库检索式），主 Skill 按子模块执行机制读取对应子模块指令文件并执行其逻辑（不要求走完整流水线）。
+主 Skill 必须先识别以下五种入口，再执行对应流程。不得把直接模式误路由到完整状态机，也不得把“用户提供了研究方向”解释为授权 Agent 代填配置。
+
+1. **完整流水线**：`开始文献检索` / `Start QueryStrategist`。执行 Step 0–2 和 G0–G2；Step 0 逐项收集配置，不生成未经用户选择的建议配置卡。
+2. **带方向完整流水线**：`开始文献检索，我的研究方向是：[topic]`。把原文记录为 `research_direction`，并标记 `research_direction_source=user_provided`；传给 Step 0 项目元数据和 Step 1，后续不再询问研究方向。除此之外仍完整执行 Setup Wizard 的逐项配置，禁止根据主题推断写作类型、目标期刊/层级、时间范围、中文补充、行业报告或联网授权，禁止直接跳到 G0。
+3. **仅 Search A（六库）**：`只启动 Search A，为……生成六库检索式`。直接读取并执行 `query_crafter/SKILL.sub.md` 的 `search_a_all` 模式；仅补问生成检索式所必需的范围信息，不执行 Setup Wizard、G0–G2 或 Search B，不访问 OpenAlex/Crossref。
+4. **单平台检索式**：`为……生成 IEEE Xplore 检索式`（平台可替换）。直接读取并执行对应平台构建器的 `single_platform` 模式；仅输出该平台结果，不执行完整流水线或联网收割。
+5. **调整已有检索式**：`帮我调宽/调窄以下检索式：……`。读取 `query_crafter/SKILL.sub.md` 的 `adjust_existing` 模式；识别目标平台，无法可靠识别时先询问；输出诊断、修改对照、预计影响和 Query QA，不访问 OpenAlex/Crossref。
+
+直接模式不得声称已完成 Step 0–2 或交付完整策略包。用户随后明确要求升级为完整检索时，再从 Step 0 开始。
 
 > **演示模式提示**：为录屏/评审演示，入口请统一使用「**开始文献检索**」，全程使用固定话术（见 `setup_wizard` 子模块的 **Step 0.6 固定话术脚本**），保证每次运行的输出逐字一致、可复现。
 

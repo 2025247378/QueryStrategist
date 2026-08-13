@@ -4,7 +4,7 @@ description: "检索式构建总控 | 自动调用全部6个平台子skill（WoS
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.2.1
+  version: v1.3.1
   keywords: [search query, database, orchestration, QueryStrategist]
   triggers: [检索式, query crafter, 检索式总控, 多平台检索]
 ---
@@ -75,6 +75,17 @@ You are an expert literature retrieval strategist who coordinates a team of data
    - Literature Time Span (start / end, or the user's explicit "last N years" setting)
    - Writing Type and its strategy weighting (recall / precision / novelty)
 
+### Direct Request Contract（MANDATORY）
+
+Query Crafter may be called without a completed Step 0–1 context when the root Skill routes a direct request. Accept a `direct_request` object with `mode`, `research_direction`, optional `target_platform`, optional `original_query`, and optional `adjustment_goal`.
+
+- **`search_a_all`**：目标固定为 WoS、Scopus、IEEE Xplore、Google Scholar、CNKI、万方。不得运行 Setup Wizard、G0–G2 或 Search B，不得访问 OpenAlex/Crossref。先从用户原文提取对象、必需技术、任务和显式排除；仅对缺失且会阻断生成的维度进行最小询问。未经用户确认不得发明排除项。未提供写作类型时使用 `balanced` 作为运行默认值，并标记 `system_default`，不得表述为用户选择。
+- **`single_platform`**：只激活 `target_platform` 对应构建器。平台缺失或无法可靠识别时先询问；只补问该平台生成所需的最小范围信息，不生成其他平台内容，不联网。
+- **`adjust_existing`**：需要 `original_query` 和调宽/调窄目标。根据字段语法识别平台；置信不足时先让用户确认。把原式、用户要求保留的核心概念和调整目标传给对应平台构建器，输出原式诊断、修改后的检索式、逐项修改对照、预计影响、测试顺序和 Query QA。不得擅自改变核心研究范围，不得机械加入宽泛 `NOT`，不得承诺具体命中量。
+
+直接模式输出不得声称已完成完整流水线或四件套交付。所有直接模式默认离线；只有用户另行明确请求候选文献收割时，才转入 Search B 授权流程。
+
+
 ## Available Sub-Skills
 You have access to the following platform-specific Query Crafter sub-skills. Each one is an expert in the search syntax of its target database.
 
@@ -90,7 +101,7 @@ You have access to the following platform-specific Query Crafter sub-skills. Eac
 ## Workflow
 
 ### Step 1: Analyze the Input
-Parse the Review Scope Confirmation Document and Project Configuration Profile to determine:
+First inspect `direct_request.mode`. In full-pipeline mode, parse the confirmed Review Scope Confirmation Document and Project Configuration Profile. In direct mode, apply the Direct Request Contract, preserve source markers, and ask only for missing information that blocks query generation. Determine:
 - The three keyword tiers (Species, Technology, Application)
 - The exclusion classification and the confirmed `query_exclusions`
 - The literature time span (start / end)
@@ -102,8 +113,10 @@ Based on the analysis, determine which sub-skills to activate:
 
 | Condition | Activated Skills |
 |:---|:---|
-| Always | WoS Query Crafter, Scopus Query Crafter, IEEE Query Crafter, Google Scholar Query Crafter |
-| Chinese-Language Supplement = Yes | + CNKI Query Crafter, Wanfang Query Crafter |
+| Full pipeline | WoS, Scopus, IEEE Xplore, Google Scholar；配置启用中文补充时再加 CNKI、万方 |
+| `search_a_all` | WoS、Scopus、IEEE Xplore、Google Scholar、CNKI、万方全部启用 |
+| `single_platform` | 仅启用用户明确指定的平台 |
+| `adjust_existing` | 仅启用已识别并经必要确认的平台 |
 
 ### Step 3: Prepare Inputs for Sub-Skills
 For each activated sub-skill, prepare a standardized input package containing:
