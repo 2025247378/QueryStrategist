@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.4.2
+  version: v1.5.1
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -198,7 +198,7 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 
 ```json
 {
-  "report_version": "v1.4.2",
+  "report_version": "v1.5.1",
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
     "search_focus": "review-priority",

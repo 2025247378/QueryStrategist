@@ -2,7 +2,11 @@
 
 > QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会通过结构化提问明确研究对象、技术方法、任务指标和排除范围，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
 >
-> **版本**：v1.4.2（2026-08-16）
+> **版本**：v1.5.1（2026-08-16）
+
+![QueryStrategist 检索策略工作台总览](img/product-overview.png)
+
+*真实交付工作台将范围卡、六库检索式、候选文献和使用说明整合到单一 `index.html` 入口。*
 
 ---
 
@@ -30,6 +34,10 @@
 
 **本提交终点 = Step 2 后的「检索策略包」**：范围界定卡 + 多平台检索式合集 + 文献候选清单 + 使用说明。它诚实交付「AI 最擅长的检索策略生成」，把写作决策留给研究者。
 
+![QueryStrategist 完整工作流程](img/workflow.png)
+
+*完整流程通过 G0-G2 人工决策门保留研究者的控制权；Search B 仅在明确授权后访问 OpenAlex 和 Crossref。*
+
 ---
 
 ## 3. 核心设计
@@ -56,6 +64,16 @@
 - **`candidate_list.csv/.md/.html` — 文献候选清单**：API 收割去重元数据（标题/作者/期刊/年份/DOI）+ OA 状态 + 可点击 DOI 链接 + 来源标注；HTML 可切换标题、表头、状态、筛选和移动端字段标签的中英文，文献题名、作者、期刊、年份和 DOI 保持原样且只有一份。CSV 和 Markdown 使用 UTF-8 BOM，便于 Windows 和 Excel 直接打开。
 - **`usage_guide.md/.html` — 使用说明**：每个检索式填入哪个平台的哪个输入框、预期命中量级、如何调宽/调窄、按写作类型的检索建议；`usage_guide.i18n.json` 提供另一语言正文。仅翻译界面、说明文字和受控配置值，不翻译关键词、排除词、检索式及文献元数据。
 
+### 工作台界面
+
+![Query Pack 六库检索式页面](img/query-pack.png)
+
+*按数据库和检索层级查看、复制并验证检索式，界面支持中英文切换。*
+
+![Candidate List 候选文献页面](img/candidate-list.png)
+
+*候选文献页面提供检索统计、搜索、状态筛选、年份筛选和 OA 信息。*
+
 > **检索策略包继承上游上下文**：所有内容均收敛自 Step 0–2 的真实选择（写作类型配置 → 范围界定 → 检索与收割 → 门控确认），禁止凭空生成；每个字段标注上游出处（`【继承自 …】`），无出处条目标记【待补】并向用户确认。详情见模板文件第 0 节「上游上下文继承总纲」。
 
 ---
@@ -75,6 +93,7 @@ QueryStrategist/
 ├── VERSION                                  # 当前正式版本
 ├── BUILD_MANIFEST.json                      # 发布文件完整性清单
 ├── README.md                                # 本文件
+├── img/                                     # GitHub README 与 SCP 介绍页图片资源
 ├── RUN.md                                   # 运行入口与代码清单
 ├── SKILL.md                                 # 主 Skill（编排器根入口）
 ├── setup_wizard/                            # Step 0  写作类型 + 配置（指令: SKILL.sub.md）
@@ -91,7 +110,7 @@ QueryStrategist/
 └── _shared_tools/                           # 运行与校验脚本
 ```
 
-> `E:\QueryStrategist` 是唯一正式仓库和唯一发布源。GitHub、比赛源码包与后续 SCP 上架均应取自同一版本的本目录，不再生成或维护第二份发布副本。SCP 页面正文以根 `SKILL.md` 为来源；`README.md` 面向 GitHub 用户和比赛评审说明项目结构、运行方式与边界。正式发布内容不包含测试目录、测试数据或 Python 缓存。
+> `E:\QueryStrategist` 是 GitHub 正式仓库和图片公开源。SCP 上架包与本仓库保持相同版本，并在介绍页通过 GitHub Raw 引用本目录的图片资源；`README.md` 面向 GitHub 用户和比赛评审说明项目结构、运行方式与边界。正式发布内容不包含测试目录、测试数据或 Python 缓存。
 
 ---
 
