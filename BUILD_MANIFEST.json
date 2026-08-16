@@ -15,7 +15,7 @@
     },
     {
       "path": "_shared_tools/scripts/html_workbench.py",
-      "sha256": "35499dda6f3996c2b50f848841782d080e2c1d935d2a3bc6ef840c668f5e3b01"
+      "sha256": "6374a9481699c9cb3692cc1ac316544f5383068adbe67712d8ad219b930035f6"
     },
     {
       "path": "_shared_tools/scripts/render_deliverables.py",
@@ -67,7 +67,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "a1ce9c02fc86443de149ac26fd02a0f4c967c1e16095a65b7b1592b5a01e159b"
+      "sha256": "2091b7498675a1e6e9512c268f3b1b4787cf3907b1ab965eb0f6323abdc7585f"
     },
     {
       "path": "RUN.md",
@@ -83,11 +83,11 @@
     },
     {
       "path": "search_strategist_v1/assets/search_strategy_pack_template.md",
-      "sha256": "b040081854fd3014e5899591a99e49c264a109e86b25d4747fffc41df863b1c5"
+      "sha256": "b3fc2352277bbaa1d6ba20fc83fc55df8ee5e25abe8f2ca2dd018aa1ec1c36f7"
     },
     {
       "path": "search_strategist_v1/SKILL.sub.md",
-      "sha256": "3d5aa71675a596edbcfacc6316c8c0306cff5e77b7f11185a596491dff56d7eb"
+      "sha256": "207b9469a07ea6ff38d36dbbcc2ea7a3e0e42d2f32dfb5fb3fdf907cb3a5ee80"
     },
     {
       "path": "setup_wizard/SKILL.sub.md",
