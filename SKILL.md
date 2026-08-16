@@ -4,7 +4,7 @@ description: "QueryStrategist（文献检索策略师）是一款面向科研人
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.5.1
+  version: v1.5.2
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -165,7 +165,7 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ## 当前版本
 
-- **v1.5.1（2026-08-16）**
+- **v1.5.2（2026-08-16）**
 
 <details>
 <summary><strong>Agent 执行规范与技术细节</strong></summary>

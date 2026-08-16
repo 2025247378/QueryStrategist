@@ -1,5 +1,5 @@
 {
-  "version": "v1.5.1",
+  "version": "v1.5.2",
   "files": [
     {
       "path": "_shared_tools/scripts/ensure_tool.py",
@@ -31,15 +31,15 @@
     },
     {
       "path": "cnki_query_crafter/SKILL.sub.md",
-      "sha256": "467c42deb1ef4a2dcc02d5e9235db7e6bacc95c758ed4f399a68f6b286c0a0ed"
+      "sha256": "a555e0bf08556679398bdc028a6c4799f162aa7942e6bc56dc32810ec465ce9c"
     },
     {
       "path": "google_scholar_query_crafter/SKILL.sub.md",
-      "sha256": "b763bc817bf56ce5544ebf5e6e529b2cd1847d1f84caa39b47656916494adc0f"
+      "sha256": "24dc6c6186dc01d22704dc3900c97c4880baefb39c52660c6f8d1f0f705384db"
     },
     {
       "path": "ieee_query_crafter/SKILL.sub.md",
-      "sha256": "6a9531a092be71f9ebb06c3102dcfd50e94e31b8cb4913348289a2517b4f9f84"
+      "sha256": "b8efe123e9734fb0eb0a45e63277e12e87861663163d61927c98249b37f555f3"
     },
     {
       "path": "img/candidate-list.png",
@@ -71,7 +71,7 @@
     },
     {
       "path": "literature_harvester/SKILL.sub.md",
-      "sha256": "c3c9924ba120e2cbab59ee6284ce3e9e0fd44bbaa9e86764e6ed037ab32126f9"
+      "sha256": "c49583938ed91080abbcf4b3218f5d5ef0fba81e6e76a54fef8bb699fcf8c525"
     },
     {
       "path": "query_crafter/scripts/query_generator.py",
@@ -79,23 +79,23 @@
     },
     {
       "path": "query_crafter/SKILL.sub.md",
-      "sha256": "17b5d6b5bb240cbeb7d6b0c5ab6b3ab2ffc87b448e2547b4ace8c501b5677e17"
+      "sha256": "add45c34332d2508a6d2ff3236823340d1de441fb9ba9cb4114f0cbb4521e3a0"
     },
     {
       "path": "README.md",
-      "sha256": "5eb2bc48a1e5d696244ddd5efd354444ec69aa2b10485923dd08f039d785a6a0"
+      "sha256": "23e3a64a6d2e1ded3569e1c44cb7935241445a25baf10ef0de430bca730f7e56"
     },
     {
       "path": "RUN.md",
-      "sha256": "3a082b2c6fc3a00d408bb5f43b7cf9bf3d0c98e671f5d8f22576f1ed69e55b29"
+      "sha256": "8eb6567a486acad9f08da08609a3cf1f9db8e0bb9bc2f8f3ca3d2fd477ee0181"
     },
     {
       "path": "scope_definer/SKILL.sub.md",
-      "sha256": "5409be0faceedd85d537a6ad3ef92e77dfdfeb9a2b20110afdde4b2922f7db8a"
+      "sha256": "64a205cca8db8c825a4e4f2fb09985970e5c6ca09142e32e4ac3dd6cd593be82"
     },
     {
       "path": "scopus_query_crafter/SKILL.sub.md",
-      "sha256": "0e0b06335d9be890de780c53cd2a9f02b7462308bed646f81eee26d3f1aa55ca"
+      "sha256": "d3130aa27a1d5847a48d1cf5338f2055489a9c8fc0b8dd36c2d9a4f5e006f223"
     },
     {
       "path": "search_strategist_v1/assets/search_strategy_pack_template.md",
@@ -103,27 +103,27 @@
     },
     {
       "path": "search_strategist_v1/SKILL.sub.md",
-      "sha256": "0d7fb91d8abbddb3cb40de5ae394d51f939dee38d5b4115a67ad24c4ea13bfb6"
+      "sha256": "fed317e74849ce9ead2ee53e6b4c0e2acd95f49260ffa8491ab5f62eef400617"
     },
     {
       "path": "setup_wizard/SKILL.sub.md",
-      "sha256": "0bcbb41f55237233d9dd28de4cbcd7e72edc38be8e7794a06713006713ed41ec"
+      "sha256": "1b1b162bd0343ca61b0d51e4e02b549b0cc39be5e0fc7bbf3dd6d3b5982ed49f"
     },
     {
       "path": "SKILL.md",
-      "sha256": "0020ab57b96ad7585cfc9d71b50584903695181ed77b4c4553adf1169e5c32f5"
+      "sha256": "87fd3e873de6749c0b54e769ab6e19fec8bef25a3d3365112dd77e2905b501fb"
     },
     {
       "path": "VERSION",
-      "sha256": "c8d27debf356c5ef491bb6f3d8ee52346ccf94177a95866e8b5adf4f196bc0a2"
+      "sha256": "e12ce503171b3086e1ac148f8abc002fa33aa4a1b58e3cbb0d1273d42e84314a"
     },
     {
       "path": "wanfang_query_crafter/SKILL.sub.md",
-      "sha256": "4af226719494a3b69f4b4d0edaae66db98e1a9a8a14f204116c125fffdcc7733"
+      "sha256": "3943229f6751a333f87c4440884d819ad431e600115010e9bab377aa15d27e40"
     },
     {
       "path": "wos_query_crafter/SKILL.sub.md",
-      "sha256": "fda36aff94fe6651832a376b70f6c11a99b2e0924068b16dee183a1d3d04495a"
+      "sha256": "6dd16ab5a710d77bf7aa8f258d82917f4492e6ffe092c3cbe4af94d4bb21b7c8"
     }
   ]
 }

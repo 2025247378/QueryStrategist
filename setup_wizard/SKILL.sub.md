@@ -4,7 +4,7 @@ description: "文献检索项目预检配置向导 | 锁定写作类型（综述
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.5.1
+  version: v1.5.2
   keywords: [literature search, configuration, setup wizard, writing type, QueryStrategist]
   triggers: [文献检索配置, 检索设置, 配置写作类型, setup, 开始配置]
 ---
