@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道并行：Search 
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.3.1
+  version: v1.4.2
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -198,7 +198,7 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 
 ```json
 {
-  "report_version": "v1.3.1",
+  "report_version": "v1.4.2",
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
     "search_focus": "review-priority",
@@ -255,11 +255,14 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 1. **读取上游产物**：Step 0 `project_meta.json`（写作类型 / 目标语言 / 目标期刊 / 时间跨度）、Step 1 `scope_definition.md`（三级关键词 + 排除项 + 优先级）、Step 5 保存的 `literature_collection_report_v1.md` + `literature_collection_v1_metadata.json`。
 2. **按模板落盘四项逻辑交付物**（到 Step 5 已解析的 `deliverables_dir`）：
    - `scope_card.md`：写作类型与策略权重、三级关键词、排除词分级、优先级、G0–G1 确认记录；
+   - `scope_card.i18n.json`：范围卡另一语言的 Markdown 正文；`source_language` 必须与 `scope_card.md` 一致；
    - `query_pack.md`：Part A 的已启用平台检索式合集与 Query QA 摘要。每条检索式必须放入独立 fenced code block，禁止放进 Markdown 表格；
    - `candidate_list.csv/.md`：Part B 收割的全量候选文献。表格单元格中的 `|` 必须写成 `\|`；
-   - `usage_guide.md`：平台填入位置、筛选下载方法和写作类型策略权重。
-3. **规范编码并生成 HTML 工作台（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；同时生成默认入口 `index.html`、四份内容页，并给 Markdown/CSV 写入 UTF-8 BOM。检索式页提供平台标签页与复制按钮，候选清单页提供本地搜索、筛选和排序。
-4. **写后校验（缺一不可）**：确认 `index.html` 及所有 `.md/.csv/.html` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 `U+FFFD` 替换字符；HTML 含 `<meta charset="utf-8">`；无外部脚本/样式依赖；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致。任一校验失败均不得进入 G2。
+   - `usage_guide.md`：平台填入位置、筛选下载方法和写作类型策略权重；
+   - `usage_guide.i18n.json`：使用说明另一语言的 Markdown 正文；`source_language` 必须与 `usage_guide.md` 一致。
+   两个 `.i18n.json` 均使用模板规定的 `schema_version: 1`，翻译标题、说明性文字、字段标签和受控配置值。写作类型使用标准对应：综述 / Review、研究论著或实验研究 / Research Article、学位论文 / Thesis / Dissertation、开题报告 / Research Proposal、基金申请 / Grant Proposal、调研报告 / Research Report、自定义 / Custom；自定义写作类型的具体文本保留用户原文。关键词、排除词、平台名、A0/A1/B、布尔与邻近算符、DOI 和文献元数据保持原样。
+3. **规范编码并生成 HTML 工作台（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；同时生成默认入口 `index.html`、四份内容页，并给 Markdown/CSV 写入 UTF-8 BOM。检索式页提供平台标签页与复制按钮，候选清单页提供本地搜索、筛选和排序；范围卡和使用说明从双语侧车嵌入中英文正文，切换语言时同步更新正文和目录。
+4. **写后校验（缺一不可）**：确认 `index.html`、所有 `.md/.csv/.html` 和两个 `.i18n.json` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 `U+FFFD` 替换字符；两个侧车 JSON 可解析、`schema_version` 为 1、且共同覆盖 `zh` 与 `en`；HTML 含 `<meta charset="utf-8">`；无外部脚本/样式依赖；范围卡和使用说明 HTML 均含 `data-content-lang="zh"` 与 `data-content-lang="en"`；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致。任一校验失败均不得进入 G2。
 5. **完成提示与 G2 门控**：先提示“已生成检索策略工作台，请优先打开 `index.html`。四件套内容已整合在该入口中，其他文件为导出备份，通常不需要逐个查看。”然后用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号：
    - question（按交互语言）: "检索策略包已交付（范围卡 + 检索式 + 候选清单 + 使用说明）。确认完成流水线，还是需要调整？"
    - options: 「确认完成」/「需要调整」

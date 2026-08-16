@@ -7,11 +7,24 @@
 
 ## 交付格式与编码硬规则
 
-1. 输出唯一默认阅读入口 `index.html`，以及作为导出或审计备份的 `scope_card.md/.html`、`query_pack.md/.html`、`candidate_list.csv/.md/.html`、`usage_guide.md/.html`。
-2. HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，不得维护第二套内容。
-3. Markdown 和 CSV 写为 UTF-8 BOM；所有文本严格 UTF-8 解码，不得出现 `U+FFFD` 替换字符。
+1. 输出唯一默认阅读入口 `index.html`，以及作为导出或审计备份的 `scope_card.md/.html`、`scope_card.i18n.json`、`query_pack.md/.html`、`candidate_list.csv/.md/.html`、`usage_guide.md/.html`、`usage_guide.i18n.json`。
+2. HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 与双语侧车生成；不得手工维护同语言的第二套 HTML 内容。
+3. Markdown 和 CSV 写为 UTF-8 BOM，双语侧车写为 UTF-8 JSON；所有文本严格 UTF-8 解码，不得出现 `U+FFFD` 替换字符。
 4. 最终文件使用 `[已验证]`、`[待人工核验]`、`[已剔除]`、`[注意]` 等纯文本状态，不使用 Emoji。
 5. 检索式必须放在 fenced code block 中，不得放进 Markdown 表格；渲染前后逐字一致。
+6. `scope_card.i18n.json` 与 `usage_guide.i18n.json` 为必需文件，格式如下：
+
+```json
+{
+  "schema_version": 1,
+  "source_language": "zh 或 en，与同名 .md 一致",
+  "translations": {
+    "另一语言代码": "完整 Markdown 正文"
+  }
+}
+```
+
+7. 双语侧车只翻译标题、字段标签和说明性文字；关键词与排除词列表、平台名、A0/A1/B、检索语法、DOI 和文献元数据不得改写。中英文正文必须表达同一范围与操作规则，不得在译文中新增或删除约束。
 
 ---
 
@@ -28,28 +41,30 @@
 
 **5 条继承硬规则**：
 1. **禁止凭空生成**：任何字段找不到上游出处时标记【待补】并向用户确认，不得编造。
-2. **语言继承**：检索式语言由 Step 0 目标语言决定；说明性文字用交互语言（跟随用户）。
+2. **语言继承**：检索式语言由 Step 0 目标语言决定；`scope_card.md` 和 `usage_guide.md` 使用交互语言，并通过各自 `.i18n.json` 补齐另一语言正文。
 3. **范围继承**：`scope_card.md` 的排除项必须与 Step 1 一致；与排除项冲突的文献不得进入候选清单。
 4. **写作类型策略权重继承**：`query_pack.md` 的查全/查准版本偏好、`candidate_list` 的排序方式均由 Step 0 写作类型决定。
 5. **一致性锁**：四份文件互引一致（范围卡的关键词 = 检索式的构建依据 = 候选清单的筛选口径）。
 
 **生成后校验清单**：
 - [ ] 可追溯：每个字段都标了 `【继承自 …】` 或【待补】
-- [ ] 语言：检索式语言 = 目标语言；说明 = 交互语言
+- [ ] 语言：检索式语言 = 目标语言；范围卡与使用说明同时具备 `zh`、`en` 正文
 - [ ] 范围：排除项与 Step 1 一致
 - [ ] 互锁：四份文件口径一致
 - [ ] 待补项：所有【待补】已向用户确认或说明
-- [ ] 落盘：四份文件均已写入 `projects/<active_project_id>/deliverables/` 或用户明确指定的目录
-- [ ] 编码：Markdown/CSV 为 UTF-8 BOM，所有文件不含 U+FFFD
+- [ ] 落盘：四项逻辑交付物及两个双语侧车均已写入 `projects/<active_project_id>/deliverables/` 或用户明确指定的目录
+- [ ] 编码：Markdown/CSV 为 UTF-8 BOM，双语侧车为有效 UTF-8 JSON，所有文件不含 U+FFFD
 - [ ] 阅读：四份 Markdown 均已生成同名离线 HTML
 - [ ] 入口：`index.html` 可导航到四份内容页，页面无外部资源请求
-- [ ] 交互：检索式可复制；候选清单可搜索、筛选、排序；关闭 JavaScript 后内容仍完整
+- [ ] 交互：检索式可复制；候选清单可搜索、筛选、排序；范围卡和使用说明可切换中英文正文与目录；关闭 JavaScript 后主 Markdown 原文仍完整
 - [ ] 保真：`query_pack.md` 与 `query_pack.html` 中检索式逐字一致
 - [ ] 授权：Search B 网络授权状态已记录；拒绝时未伪造空收割成功
 
 ---
 
 ## 1. `scope_card.md` — 范围界定卡
+
+同时生成 `scope_card.i18n.json`，提供以下范围卡完整正文的另一语言版本。写作类型等受控配置值必须使用标准中英对应（例如“综述”与“Review”）；自定义值、关键词、排除词和确认记录中的事实值必须与主 Markdown 逐项一致，不得自行翻译或改写。
 
 ```
 # 范围界定卡
@@ -167,6 +182,8 @@ title, authors, journal, year, doi, doi_link, oa_status, source
 ---
 
 ## 4. `usage_guide.md` — 使用说明
+
+同时生成 `usage_guide.i18n.json`，提供以下使用说明完整正文的另一语言版本。平台名称、字段名、A0/A1/B 和检索语法保持原样。
 
 ```
 # 使用说明

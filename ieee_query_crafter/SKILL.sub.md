@@ -4,7 +4,7 @@ description: "IEEE Xplore检索式构建器 | 将三级关键词转化为 Advanc
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.3.1
+  version: v1.4.2
   keywords: [IEEE Xplore, command search, search query, engineering, QueryStrategist]
   triggers: [IEEE, 检索式, 工程文献, IEEE Xplore, Command Search, command search]
 ---

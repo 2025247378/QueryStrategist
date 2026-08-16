@@ -4,7 +4,7 @@ description: "文献自动收割器（两源版）| OpenAlex 无密钥收割主�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.3.1
+  version: v1.4.2
   keywords: [literature harvesting, OpenAlex, Crossref, API, QueryStrategist]
   triggers: [文献收割, harvester, API收割, 元数据]
 ---
