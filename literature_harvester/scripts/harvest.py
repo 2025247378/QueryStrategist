@@ -397,7 +397,8 @@ def harvest_gradient(queries, per_query=25, verify=True, mailto=None,
                      network_consent=False):
     """Run a bounded 2-3 query OpenAlex gradient and verify after deduplication.
 
-    ``queries`` contains dictionaries with ``name`` and ``query``. The
+    ``queries`` contains dictionaries with ``name`` and ``query`` plus optional
+    per-query ``min_year`` / ``max_year`` overrides. The
     function collects all OpenAlex records first, deduplicates them, and only
     then sends DOI-bearing records to Crossref, avoiding duplicate validation
     requests across overlapping gradients.
@@ -421,6 +422,8 @@ def harvest_gradient(queries, per_query=25, verify=True, mailto=None,
         for item in queries:
             name = str(item.get("name") or item.get("id") or f"query_{len(query_stats) + 1}")
             query = str(item.get("query") or "").strip()
+            query_min_year = item.get("min_year", min_year)
+            query_max_year = item.get("max_year", max_year)
             if not query:
                 query_stats.append({"name": name, "harvested": 0, "error": "empty query"})
                 continue
@@ -428,15 +431,22 @@ def harvest_gradient(queries, per_query=25, verify=True, mailto=None,
                 if all(terms is not None for terms in filtered_terms):
                     papers = harvest_openalex_filtered(
                         species_terms, tech_terms, task_terms,
-                        per_platform=per_query, min_year=min_year or 1900,
-                        max_year=max_year, exclude_terms=exclude_terms,
+                        per_platform=per_query, min_year=query_min_year or 1900,
+                        max_year=query_max_year, exclude_terms=exclude_terms,
                     )
                 else:
-                    papers = harvest_openalex(query, per_query, min_year=min_year, max_year=max_year)
+                    papers = harvest_openalex(
+                        query, per_query, min_year=query_min_year, max_year=query_max_year
+                    )
                 for paper in papers:
                     paper["search_b_query"] = name
                 raw.extend(papers)
-                query_stats.append({"name": name, "harvested": len(papers)})
+                query_stats.append({
+                    "name": name,
+                    "harvested": len(papers),
+                    "min_year": query_min_year,
+                    "max_year": query_max_year,
+                })
             except Exception as exc:
                 query_stats.append({"name": name, "harvested": 0, "error": str(exc)})
         unique = deduplicate_papers(raw)
@@ -756,6 +766,14 @@ def main():
                     "count": len(selected),
                     "names": [str(item.get("name") or item.get("id") or "unnamed")
                               for item in selected],
+                    "queries": [
+                        {
+                            "name": str(item.get("name") or item.get("id") or "unnamed"),
+                            "min_year": item.get("min_year", args.min_year),
+                            "max_year": item.get("max_year", args.max_year),
+                        }
+                        for item in selected
+                    ],
                 }
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 ap.error(f"无法读取 --gradient-file: {exc}")

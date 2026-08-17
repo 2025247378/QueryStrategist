@@ -1,17 +1,17 @@
 ---
 name: querystrategist
-description: "QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会通过结构化提问明确研究对象、技术方法、任务指标和排除范围，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。"
+description: "QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会运用 LLM 语义理解自动识别研究对象、技术方法、任务指标和范围边界，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。"
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.5.2
+  version: v1.6.1
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
 
 # QueryStrategist（文献检索策略师）
 
-QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会通过结构化提问明确研究对象、技术方法、任务指标和排除范围，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
+QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会运用 LLM 语义理解自动识别研究对象、技术方法、任务指标和范围边界，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
 
 > **安装提示**：请安装或提交完整的 QueryStrategist 目录。本项目依赖 11 个子模块、运行脚本和交付模板；只有根 `SKILL.md` 无法运行完整流程。
 
@@ -40,38 +40,32 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 | 你的需求 | 建议表达 | 得到的结果 |
 |---|---|---|
 | 完成一次系统检索 | 开始文献检索 | 检索策略包：范围卡、六库检索式、候选清单和使用说明 |
-| 已有明确研究方向 | 开始文献检索，我的研究方向是：…… | 自动带入研究方向且不再重复询问，并继续逐项配置 |
+| 已有明确研究方向 | 开始文献检索，我的研究方向是：…… | 自动建立默认配置与范围卡，只在范围确认时打断一次 |
 | 只生成六库检索式 | 只启动 Search A，为……生成六库检索式 | 六库 A0/A1/B 检索式、使用说明和 Query QA（不联网） |
 | 只生成某个平台 | 为……生成 IEEE Xplore 检索式 | 指定平台的分层检索式、使用说明和 Query QA |
 | 调整已有检索式 | 帮我调宽/调窄以下检索式：…… | 原式诊断、修改结果、调整理由和 Query QA |
 
 ## 使用前准备
 
-开始前可以准备以下信息；不确定的内容也可以在对话中逐项确认，不需要一次性全部提供：
+完整流程只要求提供一句话研究方向。写作类型、目标语言、目标期刊、期刊层级、时间范围、中文文献和行业报告均使用安全默认值，不再逐项询问。用户在入口中明确给出的期刊、年份、写作类型、平台或排除要求会覆盖默认值。
 
-- 写作类型：综述、研究论文、学位论文、开题报告、基金申请或专题调研。
-- 一句话研究方向。
-- 文献时间范围。
-- 是否需要中文文献。
-- 必须包含的研究对象、技术或任务。
-- 明确不纳入的研究内容。
-- 最终结果保存目录。
+如有明确边界，也可以一并提供必须包含或不纳入的内容；未提供时，系统会先生成宽范围卡供一次性确认。交付物默认保存到项目目录，无需提前选择路径。
 
 ## 一次完整使用会经历什么
 
-### 1. 配置检索目标
+### 1. 自动建立默认配置
 
-确认写作类型、目标语言、时间范围、目标期刊和中文数据库需求。写作类型会影响查全、查准和新颖性的策略权重。
+系统根据研究方向自动建档，默认采用通用检索策略、生成六库检索式，并提供近 10 年、近 5 年和近 2 年的数据库筛选预设；Search A 检索式本身不写死年份。G0 仅执行内部完整性校验，不要求用户确认。
 
 ### 2. 界定研究范围
 
-共同确定研究对象、必需技术、支持方法、任务指标、同义词和排除项。排除词会分为强排除、弱排除和风险排除；只有经确认的强排除进入 `NOT`，宽泛词保留为人工筛选提示。系统会把这些内容整理成可确认的范围卡。
+系统从研究方向生成研究对象、必需技术、支持方法、任务指标和中英文同义词，并整理为范围卡。自动推断的排除词不进入 `NOT`；只有用户明确提出且适合作为强排除的内容才可进入。用户只需在 G1 选择直接生成完整策略包或调整范围。
 
 ### 3. 生成并交付检索策略
 
 生成 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方检索式，并自动执行 Query QA，检查括号、引号、平台字段、查询长度、IEEE clause、排除词风险和综述限定。经用户明确授权后，可继续通过 OpenAlex 的 2-3 个梯度查询收集候选文献，合并去重后再使用 Crossref 按 DOI 核验。
 
-流程中设置三次人工确认。系统会等待用户确认，不会自行改变研究范围或越过交付决策。
+流程保留两个人工业务决策门：G1 确认范围，G2 确认交付。Search B 联网前另行请求一次隐私授权；这项授权不是业务决策门，拒绝后仍会交付六库 Search A 和完整工作台。
 
 ## 如何使用 A0、A1 和 B
 
@@ -165,14 +159,14 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ## 当前版本
 
-- **v1.5.2（2026-08-16）**
+- **v1.6.1（2026-08-17）**
 
 <details>
 <summary><strong>Agent 执行规范与技术细节</strong></summary>
 
 以下内容供运行本 Skill 的 Agent 使用。普通用户无需阅读。
 
-本文件是 **QueryStrategist** 的主 Skill（唯一入口），承担编排器职责：驱动 **Step 0–2 状态机**（Setup Wizard → Scope Definer → Search Strategist V1），在每个决策门（G0–G2）暂停等待人工确认，最终交付**检索策略包**（范围卡 + 6 库检索式 + 文献候选清单 + 使用说明）。
+本文件是 **QueryStrategist** 的主 Skill（唯一入口），承担编排器职责：驱动 **Step 0–2 状态机**（Setup Wizard → Scope Definer → Search Strategist V1）。G0 为内部自动校验，人工业务决策门仅保留 G1 与 G2，最终交付**检索策略包**（范围卡 + 6 库检索式 + 文献候选清单 + 使用说明）。
 
 本包内还包含 **11 个子模块目录**（`setup_wizard/`、`scope_definer/`、`search_strategist_v1/`、`query_crafter/`、6 个平台检索器、`literature_harvester/`）。每个子模块的指令文件统一为 `SKILL.sub.md`，由主 Skill 按“子模块执行机制”读取并执行。
 
@@ -192,24 +186,24 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ## 触发方式与入口路由（MANDATORY）
 
-主 Skill 必须先识别以下五种入口，再执行对应流程。不得把直接模式误路由到完整状态机，也不得把“用户提供了研究方向”解释为授权 Agent 代填配置。
+主 Skill 必须先识别以下五种入口，再执行对应流程。不得把直接模式误路由到完整状态机。
 
-1. **完整流水线**：`开始文献检索` / `Start QueryStrategist`。执行 Step 0–2 和 G0–G2；Step 0 逐项收集配置，不生成未经用户选择的建议配置卡。
-2. **带方向完整流水线**：`开始文献检索，我的研究方向是：[topic]`。把原文记录为 `research_direction`，并标记 `research_direction_source=user_provided`；传给 Step 0 项目元数据和 Step 1，后续不再询问研究方向。除此之外仍完整执行 Setup Wizard 的逐项配置，禁止根据主题推断写作类型、目标期刊/层级、时间范围、中文补充、行业报告或联网授权，禁止直接跳到 G0。
+1. **完整流水线**：`开始文献检索` / `Start QueryStrategist`。若未提供研究方向，只询问这一项；取得方向后执行 Step 0–2。Step 0 自动建立默认配置并完成 G0 内部校验，不询问七项配置。
+2. **带方向完整流水线**：`开始文献检索，我的研究方向是：[topic]`。把原文记录为 `research_direction`，标记 `research_direction_source=user_provided`，直接执行零配置建档与范围生成。用户明确给出的写作类型、期刊、年份、平台或边界优先于系统默认值；不得重复询问已经提供的信息。
 3. **仅 Search A（六库）**：`只启动 Search A，为……生成六库检索式`。直接读取并执行 `query_crafter/SKILL.sub.md` 的 `search_a_all` 模式；仅补问生成检索式所必需的范围信息，不执行 Setup Wizard、G0–G2 或 Search B，不访问 OpenAlex/Crossref。
 4. **单平台检索式**：`为……生成 IEEE Xplore 检索式`（平台可替换）。直接读取并执行对应平台构建器的 `single_platform` 模式；仅输出该平台结果，不执行完整流水线或联网收割。
 5. **调整已有检索式**：`帮我调宽/调窄以下检索式：……`。读取 `query_crafter/SKILL.sub.md` 的 `adjust_existing` 模式；识别目标平台，无法可靠识别时先询问；输出诊断、修改对照、预计影响和 Query QA，不访问 OpenAlex/Crossref。
 
 直接模式不得声称已完成 Step 0–2 或交付完整策略包。用户随后明确要求升级为完整检索时，再从 Step 0 开始。
 
-> **演示模式提示**：为录屏/评审演示，入口请统一使用「**开始文献检索**」，全程使用固定话术（见 `setup_wizard` 子模块的 **Step 0.6 固定话术脚本**），保证每次运行的输出逐字一致、可复现。
+> **演示模式提示**：为录屏或评审演示，建议使用「**开始文献检索，我的研究方向是：……**」。主题明确时系统自动完成 Step 0 与 G0，只在 G1 展示范围卡，可稳定复现短流程。
 
 ## 包内子模块一览
 
 | 子模块目录 | 流程定位 | 功能 |
 |---|---|---|
-| `setup_wizard` | Step 0 | 写作类型 + 目标语言/期刊 + 时间跨度配置 |
-| `scope_definer` | Step 1 | 范围界定（三级关键词 + 排除项 + 优先级） |
+| `setup_wizard` | Step 0 | 项目建档 + 安全默认配置 + G0 自动校验 |
+| `scope_definer` | Step 1 | 自动范围卡（三级关键词 + 排除项 + 优先级）与 G1 确认 |
 | `search_strategist_v1` | Step 2（终点） | 双通道检索：Search A 检索式 + Search B API 收割 → 交付检索策略包 |
 | `query_crafter` | 子模块 | 6 平台检索式总控 |
 | `wos_query_crafter` / `scopus_query_crafter` / `ieee_query_crafter` / `google_scholar_query_crafter` / `cnki_query_crafter` / `wanfang_query_crafter` | 子模块 | 各平台高级检索式构建器 |
@@ -236,8 +230,8 @@ Markdown 和 CSV 统一写为 UTF-8 BOM；HTML 为默认阅读入口、可离线
 ## 核心红线
 
 - **收割 ≠ 语料**：API 收割的元数据仅作候选清单，绝不自动进入下游当作全文语料，需用户自行下载验证。
-- **人机闸门**：G0–G2 为强制人工确认点，范围与检索策略确认始终由人类决定。
-- **语言锁**：回复语言严格跟随用户当前消息语言；检索式与候选清单的语言由 Step 0 目标期刊决定。
+- **人机闸门**：G0 为内部自动校验；G1 与 G2 是人工确认点，范围与最终交付确认始终由人类决定。
+- **语言锁**：回复语言严格跟随用户当前消息语言；检索式按各数据库适用的原生语言与官方语法生成，文献元数据保持来源原文。
 
 ---
 
@@ -303,8 +297,8 @@ This rule takes priority over any conflicting language preference in downstream 
 **The binding rule:**
 1. **At activation, consult ONLY the workspace.** When the pipeline starts (Step 0 / Step 0.5), the ONLY sources of context are: (a) the current workspace's `projects/` directory (existing QueryStrategist projects) and (b) the user's explicit input in the current session (entry command, answers to configuration questions, direction sentence).
 2. **NEVER pre-fill from long-term memory.** The assistant MUST NOT use the user's long-term research background, past project topics, target journals, or any cross-project memory to pre-fill configuration options, to hint at scope directions, or to "help" the user describe their research direction. No "基于你的长期研究背景，我已预填…" type of behavior.
-3. **Fresh workspace = fresh start.** If `projects/` is empty (or contains no real project), treat the session as a brand-new project: ask the user for all configuration dimensions (Step 0) and the direction sentence (Step 1) from scratch, with no borrowed defaults.
-4. **Scope questions come from the user.** In Scope Definer, the direction sentence and all substantive scope dimensions must come from the user's current-session answers — never inferred from long-term memory and merely presented for rubber-stamping.
+3. **Fresh workspace = fresh start.** If `projects/` is empty (or contains no real project), treat the session as a brand-new project. Ask only for a missing research direction, then create the documented system defaults; do not borrow values from older projects or long-term memory.
+4. **Scope provenance must be explicit.** The direction sentence comes from the current session. Scope fields may be safely inferred from that direction and must be marked `system_inferred_safe`; explicit user input is marked `user_explicit` and always takes precedence.
 5. This rule binds every sub-module call across Steps 0–2.
 
 ---
@@ -334,7 +328,7 @@ The user initiates the pipeline with:
 > ""启动检索策略""
 > ""建检索式""
 
-**Step 0 启动行为（重要）**：入口指令触发后，主 Skill 第一步读取 `setup_wizard/SKILL.sub.md` 并执行（Step 0）。Step 0 配置写作类型（综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义）、目标语言、目标期刊、时间跨度、中文补充等。详见 Setup Wizard 子模块。
+**Step 0 启动行为（重要）**：入口指令触发后，主 Skill 第一步读取并执行 `setup_wizard/SKILL.sub.md`。若研究方向缺失，只询问研究方向；否则自动建立项目与默认配置并执行 G0 内部校验。不得逐项询问写作类型、目标语言、目标期刊、期刊层级、时间范围、中文文献或行业报告。
 
 Alternatively, the user can specify a research direction directly:
 
@@ -354,17 +348,19 @@ For each step, the main Skill:
 1. **Check preconditions**: Ensure all required inputs from previous steps are available.
 2. **Invoke the sub-module**: Read the corresponding `SKILL.sub.md`, pass the relevant context, and execute its defined workflow (or call the registered independent Skill if installed — see 子模块执行机制).
 3. **Present output**: Display the sub-module's output to the user in a clear, summarized format.
-4. **Pause for confirmation**: At every decision gate, stop and wait for the user's explicit response. Do not proceed until the user confirms.
+4. **Apply the gate policy**: G0 is an automatic validation and does not pause. Pause only at G1 and G2; request separate network consent immediately before Search B.
 5. **Record state**: Mark the step as `completed` and log the outputs for downstream use.
 
-### Decision Gates (Mandatory Pause Points)
-The main Skill MUST pause and wait for user confirmation at the following gates (G0–G2). Confirmation prompts are given in the user's **interaction language** (detected in Step 0 and locked per the Hard Language Lock). The table below shows English and Chinese reference versions; use the one matching the user's language (or translate the prompt into any other language the user is writing in):
+### Decision Gates and Network Consent
+G0 is an internal validation and MUST NOT interrupt the user. The main Skill pauses at G1 and G2 only. Immediately before Search B, it requests a separate one-time network authorization. All prompts use the user's **interaction language**:
 
 | Gate | After Step | English Prompt | Chinese Prompt |
 |:---|:---|:---|:---|
-| G0 | Setup Wizard (Step 0) | "Configuration confirmed. Proceed to Scope Definer?" | "配置已确认。是否继续进入范围界定（Scope Definer）？" |
-| G1 | Scope Definer (Step 1) | "Scope confirmed. Proceed to Search Strategist V1?" | "范围已确认。是否继续进入检索策略（Search Strategist V1）？" |
+| G0 | Setup Wizard (Step 0) | Automatic validation; no user prompt | 内部自动校验，不向用户提问 |
+| G1 | Scope Definer (Step 1) | "Use this scope to generate the complete search strategy pack, or adjust it?" | "按此范围直接生成完整检索策略包，还是调整范围？" |
 | G2 | Search Strategist V1 (Step 2) | "Search strategy pack delivered (scope card + queries + candidate list + usage guide). Confirm to complete the pipeline, or request adjustments?" | "检索策略包已交付（范围卡 + 检索式 + 候选清单 + 使用说明）。确认完成流水线，还是需要调整？" |
+
+Before Search B, use the consent wording defined in `search_strategist_v1/SKILL.sub.md`: explain that only OpenAlex and Crossref HTTPS APIs are accessed, no full text is downloaded, and no personal information is submitted. A refusal sets Search B to `skipped_by_user` and does not block Search A or delivery.
 
 ### Pipeline Step Map (0–2)
 
@@ -391,11 +387,11 @@ If a sub-module encounters an error or cannot complete:
 
 | Field | Type | Producer (Step) | Consumer Steps | Description |
 |:---|:---|:---:|:---|:---|
-| `config` | object | 0 — Setup Wizard | 1, 2 | Project Configuration Profile: `interaction_language` (ISO 639-1, auto-detected in Step 0), target language, writing type (综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义), journal tier, time span, CN supplements |
+| `config` | object | 0 — Setup Wizard | 1, 2 | Project Configuration Profile: `interaction_language`; `writing_type=general` by default; six databases enabled; `time_range.mode=multi_window` with 10/5/2-year presets; field-level source `system_default` or `user_explicit` |
 | `active_project_id` | string | 0 — Setup Wizard | all | 当前激活的项目 ID。 |
 | `active_project_dir` | string | 0 — Setup Wizard | all | 当前激活项目目录（相对工作区根）。**所有下游文件读写与记忆操作仅限此目录**，见「项目隔离」硬规则。 |
 | `scope` | object | 1 — Scope Definer | 2 | Search Scope Confirmation Document（core direction；Tier 1 对象层；Tier 2 必需技术锚点 `tier2_required_anchor` 与支持方法 `tier2_supporting_method`；Tier 3 任务层；`keyword_tiers_zh` 中文词表；`strong_exclusions` / `soft_exclusions` / `risky_exclusions` / `query_exclusions` 及中文对应字段；`explicit_exclusions` 仅作兼容；priority rules） |
-| `network_access_consent` | object | 2 — Search Strategist V1 | Search B | OpenAlex/Crossref 联网授权：`granted`、`endpoints`、`purpose`、`mailto_submitted`。每次独立运行询问一次，当前运行及 Retry 复用；拒绝时 Search B 标记 `skipped_by_user`。这是操作授权，不改变 G0–G2 业务决策门数量。 |
+| `network_access_consent` | object | 2 — Search Strategist V1 | Search B | OpenAlex/Crossref 联网授权：`granted`、`endpoints`、`purpose`、`mailto_submitted`。每次独立运行询问一次，当前运行及 Retry 复用；拒绝时 Search B 标记 `skipped_by_user`。这是独立操作授权，不计入 G1/G2 业务决策门。 |
 | `deliverables_dir` | string | 0/2 | 2, final | 最终交付目录。默认 `projects/<active_project_id>/deliverables/`；用户明确给出路径时直接使用。 |
 | `display_mode` | enum | user/default | 2, final | `summary`（默认）或 `audit`。默认聊天仅显示摘要，审计模式完整展开。 |
 | `query_qa` | object | 2 — Query Crafter | 2, final | 六库检索式 QA：总体和逐平台 `PASS/WARNING/FAIL`、检查项、警告与修复记录；`FAIL` 阻断交付。 |

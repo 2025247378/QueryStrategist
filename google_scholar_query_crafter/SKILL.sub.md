@@ -4,7 +4,7 @@ description: "Google Scholar检索式构建器 | 将三级关键词转化为不�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.5.2
+  version: v1.6.1
   keywords: [Google Scholar, search query, scholar, QueryStrategist]
   triggers: [Google Scholar, 检索式, 学者]
 ---

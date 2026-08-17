@@ -1,107 +1,130 @@
 ---
 name: scope_definer
-description: "综述范围界定器 | 将研究方向收敛为三级关键词体系、明确排除项和文献优先级规则，产出研究范围确认文档。Scope-defining module for the QueryStrategist workflow (Step 1). Use this skill for search scope and keyword construction tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
+description: "QueryStrategist 范围界定模块 | 从研究方向自动构建对象、技术、任务、中文词表和排除词分级，默认采用安全的宽范围策略。主题明确时不逐项提问，只展示一次范围卡并在 G1 让用户选择直接生成或调整；仅当对象或核心技术无法识别时，允许一次批量澄清。"
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.5.2
-  keywords: [literature search, scoping, keyword tiers, exclusion criteria, QueryStrategist]
-  triggers: [综述范围, scope, 界定, 关键词, 排除项]
+  version: v1.6.1
+  keywords: [research scope, keyword tiers, exclusions, fast confirmation, QueryStrategist]
+  triggers: [研究范围, 范围界定, 关键词体系, scope]
 ---
-
-## 子模块运行信息
-
-- **Type**: LLM-agent skill (no MCP server dependency; Phase 1-5 zero external model).
-- **Invocation**: Called through `querystrategist` (main Skill), including when the user requests a single submodule capability.
-- **Runnable helpers**: Prompt-driven skill — no mandatory helper script.
-- **Data flow**: Reads/writes the shared Pipeline Context across the Step 0-2 workflow.
-
 
 # Scope Definer
 
-## QueryStrategist System
-This skill is part of the **QueryStrategist** workflow (Step 1). It receives the configuration profile from Setup Wizard and interactively narrows down the user's research direction into a concrete, searchable scope.
+## 目标
 
-## 交互工具可用性与纯文本降级（MANDATORY）
+把研究方向转化为可执行的宽范围检索结构，同时把启动前交互压缩为一次 G1 确认。自动推断用于扩大召回，不得自动制造会误杀结果的硬限制。
 
-**本 skill 的所有交互（Step 2 协同定界提问、G1 确认门）优先使用 `AskUserQuestion` 弹窗；环境无此工具时，降级为在聊天中列出编号选项（1/2/3…）请用户回复编号或文字，`multiSelect` 场景提示"可多选，用逗号分隔"。** 降级路径下问题内容、选项完整性、"等待用户回复后再继续"的原则全部保持不变；禁止因工具缺失而跳过提问或替用户默认决策。
+## 输入
 
-## Description
-An interactive clarification module that helps the user converge a broad research interest into a well-defined review scope. It uses a **single-sentence direction + interactive co-construction** approach: the user describes the intended scope in one natural sentence, then the assistant asks the user to **determine the substantive content** of the scope (modal/relationship framing, species granularity, sub-tasks, exclusions, boundaries) via targeted questions — rather than inferring the whole document and only offering a confirm/adjust rubber-stamp. The user's answers are structured into the **Review Scope Confirmation Document**.
+- Step 0 `config`
+- `research_direction`
+- 用户当前会话中明确给出的对象、技术、任务和排除范围
 
-## Role
-You are a research strategist who excels at helping students and researchers transform vague ideas into sharply defined search scopes. Your key strength is **guiding the user to define the scope content through targeted questions and then structuring their answers** — you surface the substantive dimensions that genuinely need the user's judgment (e.g., how to relate multiple modalities, how broadly to define the species/object, which sub-tasks to cover, what to exclude), ask the user to decide each one, and synthesize those decisions into the document. You are patient, methodical, and never assume you know what the user wants — the scope content is THEIR call, not yours to infer-and-present. You respect their time and avoid redundant loops by bundling related questions into a single AskUserQuestion call (or a single numbered list in the text fallback).
+`research_direction` 缺失时返回 Step 0，只询问这一项。
 
-## Input Requirements
-The **Project Configuration Profile** from Setup Wizard (language, writing type, journal tier, time span, etc.). These settings influence the questioning angle (e.g., a critical-angle writing type will prompt for a diagnostic angle).
+## Step 1：自动构建范围
 
-## Workflow
+从研究方向生成：
 
-### Step 1: Acknowledge Configuration
-Briefly restate the key configuration decisions from Setup Wizard (especially target language and review type) to show continuity.
+1. `tier1_object`：研究对象及常用同义词、上下位词。
+2. `tier1_recall_anchor`：可用于 A0 扩召回的对象中心词。
+3. `tier2_required_anchor`：没有它就偏离主题的核心技术。
+4. `tier2_supporting_method`：模型、算法、仪器或分析方法，只作支持词，不强制进入所有检索式。
+5. `tier3_task`：品质、性能、检测、分级、溯源等应用任务。
+6. `tier3_recall_anchor`：任务层的宽泛召回词。
+7. `keyword_tiers_zh`：供 CNKI、万方使用的中文词表。
 
-### Step 2: Scope Definition — Interactive Co-Construction (Primary Mode)
+范围优先保持宽泛。若某个方法只是常见实现而非研究主题，不得升级为 `tier2_required_anchor`。
 
-The scope document's **content must be determined by the user**, not inferred by the assistant and merely confirmed. Follow this flow:
+## Step 2：排除词安全策略
 
-1. **Get the direction sentence (free-text, NOT `AskUserQuestion`):** If the user has not already stated their direction (e.g., they only said "开始文献检索"), invite them to describe the intended scope in one natural sentence, as concrete as possible. Example prompt (in the user's interaction language):
-   > "请用一句话描述你希望检索覆盖的研究范围，越具体越好。例如：'近五年基于扩散模型的可控图像生成方法及其在医学影像中的应用'。"
-   If the direction was already provided at pipeline entry, use it directly as the starting point — do NOT re-ask.
+排除项分为：
 
-2. **Derive the substantive dimensions that need the user's decision.** From the direction sentence + the Project Configuration Profile, identify the dimensions where genuine judgment is required. Typical dimensions (adapt to the topic; do NOT ask about dimensions that are already unambiguous):
-   - **Relationship / framing** of multiple elements (e.g., for multi-modal topics: fusion-first vs. review-each-then-fuse vs. cover-both-equally).
-   - **Object / species granularity** (e.g., focus on a dominant species vs. broad genus vs. include related taxa).
-   - **Sub-tasks / sub-questions to cover** (use `multiSelect` — e.g., behavior recognition, amount estimation, control, decision system).
-   - **Explicit exclusions / boundaries** (use `multiSelect` — only what the user actually selects is excluded; do NOT pre-fill exclusions the user did not choose).
-   - Any other topic-specific dimension where the assistant would otherwise be guessing.
+- `strong_exclusions`：仅包含用户明确要求排除的具体短语，可进入 `NOT`。
+- `soft_exclusions`：系统推断的可能无关方向，只用于人工筛选提示。
+- `risky_exclusions`：过宽词、主题核心词或可能误杀相关文献的词，默认不进入检索式。
+- `query_exclusions`：只能从用户明确的 `strong_exclusions` 中选取。
 
-3. **Ask the user to determine the content (`AskUserQuestion`，无此工具则聊天内编号列表；可以合并多个问题到一次询问):** Present the dimensions from step 2 as questions. For each, offer concrete options; use `multiSelect: true` for sub-tasks and exclusions. Do NOT add "(Recommended)" labels. Do NOT infer a default and present it as if decided — let the user choose.
-   - This is the step where scope content is established. It is the opposite of "generate the full document, then ask confirm/adjust."
+用户未明确给出排除项时，`strong_exclusions` 和 `query_exclusions` 必须为空。不得因为常识判断自动写入 `NOT`。
 
-4. **Synthesize the user's answers** into the **Review Scope Confirmation Document** (Step 3). The document now reflects the user's actual decisions; present it and go to the G1 confirmation gate (which verifies accurate synthesis, not a rubber-stamp of assistant assumptions).
+## Step 3：最小澄清规则
 
-**Note:** `AskUserQuestion`（或降级编号列表）is used here (Step 2) to **co-determine scope content** AND again at the G1 gate to confirm. It is NOT reserved for G1 only.
+主题同时具备可识别对象和核心技术时，不提任何范围问题，直接生成范围确认文档。
 
-### Step 3: Output the Review Scope Confirmation Document
-Compile and output the document from the user's answers in Step 2, then present it at the G1 confirmation gate. This document is the mandatory input for **Search Strategist V1**.
+只有以下情况允许澄清：
 
-## Output Format
-**Review Scope Confirmation Document**
-- **Core Research Direction**: [one sentence, reflecting the user's direction + decisions]
-- **Keyword Tiers**:
- - Tier 1 – Species/Object: [keywords]
- - Tier 1 Recall Anchor: [at least one standalone generic object/domain term for platform recall, e.g. fish]
- - Tier 2 – Technology/Method: [keywords]
- - Tier 2 Required Anchor: [indispensable technology terms that every Search A result must contain]
- - Tier 2 Supporting Method: [analysis/algorithm terms that cannot replace the required anchor]
- - Tier 3 – Application/Task: [keywords]
- - Tier 3 Recall Anchor (optional): [standalone task concepts for sparse engineering databases, e.g. quality, freshness, grading]
- - **Exclusion Policy**:
-   - `strong_exclusions`: [明确短语，可进入 NOT]
-   - `soft_exclusions`: [宽泛词，仅作为人工筛选提示]
-   - `risky_exclusions`: [高风险宽泛词，默认不进入检索式，需再次确认]
-   - `query_exclusions`: [用户最终批准进入 NOT 的词]
- - **Explicit Exclusions**: [兼容字段；等于 query_exclusions]
-- **Chinese Keyword Tiers** (when Chinese supplement is enabled): [independent Chinese Tier 1 / Required Anchor / Supporting Method / Tier 3]
-- **Chinese Explicit Exclusions** (when Chinese supplement is enabled): [Chinese equivalents confirmed by the user]
-- **Suggested Literature Priority**: (based on configuration) e.g., English empirical > English reviews > Chinese empirical > Chinese reviews
-- **Writing Type Alignment**: [e.g., critical-angle writing — diagnostic angle: identifying structural barriers in cross-species technology transfer]
+- 研究方向只有宽泛领域，没有对象。
+- 无法区分核心技术与支持方法。
+- 同一句话存在互斥任务解释，选择不同会明显改变检索词。
 
-## Important Notes
-- This skill does NOT retrieve any literature; it only defines the search boundaries.
-- Do not place indispensable technology and generic supporting algorithms in one undifferentiated OR group. For example, spectral imaging is a required anchor for a spectral-imaging review, while machine learning and image processing are supporting methods.
-- Tier 1 must retain precise domain phrases and at least one standalone recall anchor. For example, `aquaculture fish`, `farmed fish`, and `fish fillet` do not replace the generic anchor `fish`; include `fish` explicitly or record it as `tier1_recall_anchor`. The anchor broadens platform wording only and does not change the user-confirmed object scope.
-- The output must be passed in its entirety to Search Strategist V1 (Step 2).
-- Scope content is **determined by the user through targeted questions (Step 2)**, then structured by the assistant — not inferred by the assistant and merely rubber-stamped at G1. Use `AskUserQuestion`（无此工具则聊天内编号列表）in Step 2 to co-determine the substantive dimensions (bundle related questions into one call; `multiSelect` for sub-tasks/exclusions), and again at the G1 gate to confirm. Do NOT add "(Recommended)" labels to any option. Do NOT pre-fill exclusions the user did not explicitly choose.
-- 排除词必须先分级再进入检索式：明确短语归入 `strong_exclusions`；可能误杀相关文献的宽泛词归入 `soft_exclusions`；`fish`、`sensor`、`disease`、`aquaculture` 等单个中心词默认归入 `risky_exclusions`，不得自动进入 NOT。只有用户确认后的 `query_exclusions` 才能传给 Query Crafter。
-- 分类结果必须向用户展示并确认：例如“以下排除词过宽，默认仅作为筛选提示而不写入 NOT：fish, sensor。是否批准其中某些词进入 NOT？”
-- At the end of the output, confirm the scope before proceeding (G1 gate), via `AskUserQuestion`（无此工具则聊天内列出「1. 确认，继续 / 2. 需要调整」请用户回复编号）:
-  - **question** (adapt to user's language):
-    - Chinese: "以下是根据你的选择整理的研究范围文档，请确认是否正确？确认后将进入检索策略（Search Strategist V1）。"
-    - English: "Above is the scope document compiled from your choices. Please confirm; we will then proceed to Search Strategist V1."
-  - **header**: "继续?" / "Proceed?"
-  - **options**:
-    1. Label: "确认，继续" / "Confirm, proceed" — Description: "进入 Search Strategist V1，开始第一轮检索"
-    2. Label: "需要调整" / "Need adjustments" — Description: "返回修改范围界定"
-  - If the user selects "需要调整" / "Need adjustments" → loop back to Step 2 to re-ask the relevant dimensions.
-  - If confirmed → proceed to Search Strategist V1.
+将所有缺失项合并为一次问题，最多询问三个维度；不得逐项进行多轮问答。若用户选择“保持宽泛”，采用不加硬限制的方案继续。
+
+## Step 4：生成范围确认文档
+
+输出简洁的 **Review Scope Confirmation Document**：
+
+```markdown
+# 研究范围确认
+
+## 研究方向
+[用户原文]
+
+## 关键词层级
+- Tier 1 对象：[...]
+- Tier 1 召回锚点：[...]
+- Tier 2 必需技术锚点：[...]
+- Tier 2 支持方法：[...]
+- Tier 3 任务：[...]
+- Tier 3 召回锚点：[...]
+- 中文词表：[...]
+
+## 排除策略
+- 强排除：[用户明确项；无则“无”]
+- 弱排除：[筛选提示]
+- 风险排除：[默认不进入 NOT]
+- 实际进入 NOT：[仅确认的强排除；无则“无”]
+
+## 默认覆盖策略
+- 数据库：Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI、万方
+- 检索层级：A0、A1、B，另附综述补充式
+- 时间：不限年份主检索，提供近 10/5/2 年筛选
+```
+
+每个字段记录 `user_explicit` 或 `system_inferred_safe` 来源。
+
+## G1：唯一前置人工确认
+
+展示范围文档后只询问一次：
+
+- `直接生成完整策略包`：确认范围并进入 Search Strategist V1。
+- `调整范围`：用户指出需要修改的字段；只修改指定字段后再次展示差异并确认。
+
+无交互工具时在聊天中列出两个编号选项。不得在 G1 前追加七项配置问题，也不得把 Search B 联网授权合并进 G1。
+
+## 输出契约
+
+向下游传递：
+
+```json
+{
+  "research_direction": "...",
+  "keyword_tiers": {
+    "tier1_object": [],
+    "tier1_recall_anchor": [],
+    "tier2_required_anchor": [],
+    "tier2_supporting_method": [],
+    "tier3_task": [],
+    "tier3_recall_anchor": []
+  },
+  "keyword_tiers_zh": {},
+  "strong_exclusions": [],
+  "soft_exclusions": [],
+  "risky_exclusions": [],
+  "query_exclusions": [],
+  "scope_sources": {},
+  "g1_status": "confirmed"
+}
+```
+
+将文档保存在活动项目目录。G1 未确认前不得启动 Search A 或 Search B。

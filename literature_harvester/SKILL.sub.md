@@ -4,7 +4,7 @@ description: "文献自动收割器（两源版）| OpenAlex 无密钥收割主�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.5.2
+  version: v1.6.1
   keywords: [literature harvesting, OpenAlex, Crossref, API, QueryStrategist]
   triggers: [文献收割, harvester, API收割, 元数据]
 ---
@@ -125,9 +125,9 @@ The following inputs are provided by the calling Search Strategist:
 
 根据三层关键词生成默认 2-3 个受控梯度查询：
 
-- `OA-Broad`：对象 + 核心技术，用于基础召回。
-- `OA-Topical`：对象 + 核心技术 + 应用任务，用于主题相关召回。
-- `OA-Precise`：对象 + 精准任务 + 技术锚点，用于补充高相关候选；范围简单时可省略。
+- `OA-Broad`：对象 + 核心技术，不设置 `min_year`，用于经典与基础召回。
+- `OA-Topical`：对象 + 核心技术 + 应用任务，默认 `min_year = 当前年份 - 10`。
+- `OA-Recent`：对象 + 核心技术 + 精准任务，默认 `min_year = 当前年份 - 5`；开题/基金可改为近 2 年。
 
 每个查询返回 20-25 条，最多 25 条。先合并 OpenAlex 结果，再按 DOI 去重；无 DOI 时按规范化标题与年份去重。**只有去重完成后**，才对有 DOI 的唯一候选逐条调用 Crossref。默认查询不足时先报告实际结果，再询问用户是否追加一次扩展查询，不得无限制追加 API 调用。综述导向通过梯度覆盖和排序体现，不得把所有查询限制为 `review` 或 `survey`。
 
@@ -137,12 +137,11 @@ The following inputs are provided by the calling Search Strategist:
 python scripts/harvest.py \
   --gradient-file search_b_queries.json \
   --network-consent \
-  --min-year 2016 --max-year 2026 \
   --per-query 25 \
   --out harvest.json
 ```
 
-`search_b_queries.json` contains two or three objects shaped as `{"name": "OA-Broad", "query": "..."}`. Do not combine `--gradient-file` with a single strict three-tier filter that would make every gradient execute the same query. Use `--species/--technology/--task` only for the single-query compatibility path.
+`search_b_queries.json` contains two or three objects shaped as `{"name": "OA-Broad", "query": "...", "min_year": null, "max_year": 2026}`. Each item may use a different time window. Do not combine `--gradient-file` with a single strict three-tier filter that would make every gradient execute the same query. Use `--species/--technology/--task` only for the single-query compatibility path.
 
 **执行策略**：所有子查询独立 try/except，单个失败仅记录该子查询错误，其余照常；全部失败才报告整体失败。验证环节对每条记录独立容错，单条验证瞬时失败标记 `verify_error` 保留，不武断判死。
 

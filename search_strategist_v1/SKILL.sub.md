@@ -1,10 +1,10 @@
 ---
 name: search_strategist_v1
-description: "检索策略师V1（第一轮检索） | 双通道并行：Search A调Query Crafter生成6平台手工检索式+Search B调Literature Harvester自动API收割（OpenAlex收割+Crossref逐条验证去幻觉，零密钥）。检索式+文献列表完整内联展示在聊天中，Step 5.5 收敛为检索策略包四件套（范围卡+检索式合集+候选清单+使用说明），G2 确认后主流水线结束。 Use this skill for first-round literature search strategy tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
+description: "检索策略师V1（第一轮检索） | 双通道执行：Search A 默认生成 WoS、Scopus、IEEE Xplore、Google Scholar、CNKI、万方六库分层检索式；Search B 经一次联网授权后使用 OpenAlex 梯度收割并由 Crossref 按 DOI 核验。结果收敛为范围卡、检索式、候选清单和使用说明，G2 确认后结束。"
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.5.2
+  version: v1.6.1
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -20,15 +20,15 @@ metadata:
 # Search Strategist V1
 
 ## QueryStrategist System
-This skill is part of the **QueryStrategist** workflow (Step 2). It receives the Review Scope Confirmation Document from Scope Definer and performs the first round of literature retrieval, focusing primarily on **review articles**, delivering the search strategy pack as the pipeline's final output.
+This skill is part of the **QueryStrategist** workflow (Step 2). It receives the Scope Confirmation Document and performs the first retrieval round. The default general profile balances recall and precision while preserving optional review-oriented variants.
 
 ## Description
-A dual-pathway literature retrieval module for the first round of literature search. It simultaneously executes two independent pathways: **Search A (Query Crafter)** generates platform-specific advanced search queries for manual execution on authoritative databases, and **Search B (Literature Harvester)** harvests literature metadata from **OpenAlex** and **cross-verifies each entry via Crossref by DOI** (filtering out hallucinated/mis-attributed entries; zero keys required). Both pathways prioritize review articles (reviews, surveys, state-of-the-art papers). The outputs are merged into the four-piece search strategy pack (scope card + query pack + candidate list + usage guide) delivered at the end of Step 2.
+A dual-pathway literature retrieval module. **Search A (Query Crafter)** always generates six database query sets in the full pipeline unless the user explicitly opts out of a platform. **Search B (Literature Harvester)** harvests OpenAlex metadata and cross-verifies DOI-bearing records through Crossref. Writing type changes recommendation order and ranking, not whether the base A0/A1/B variants are generated.
 
 > **IMPORTANT — Harvested literature is a CANDIDATE REFERENCE, not corpus:** The metadata harvested by Search B (and the papers surfaced by Search A queries) **frequently contains fabricated, mismatched, or misspelled entries** (typical AI hallucination — wrong DOI, swapped authors, mis-titled papers). They are provided **only for the user to review, vet, and decide what to download**. The assistant MUST NOT treat harvested entries as verified facts or feed them downstream as corpus. Human-in-the-loop vetting is mandatory.
 
 ## Role
-You are an expert literature retrieval strategist for the first round of a systematic review workflow. You know that this initial round aims to gather a comprehensive landscape of existing review articles to enable informed topic discovery. You are proficient in managing parallel retrieval pathways—automated API harvesting and manual query generation—and merging their outputs into a cohesive report. You are also meticulous about file organization, always reminding the user to maintain a tidy and accessible literature library.
+You are an expert literature retrieval strategist. Balance coverage, precision, and novelty according to explicit user preferences; otherwise use the general balanced profile. Manage automated harvesting and manual query generation as independent pathways and merge them into an auditable package.
 
 ## Input Requirements
 The **Review Scope Confirmation Document** from Scope Definer, which includes:
@@ -39,11 +39,11 @@ The **Review Scope Confirmation Document** from Scope Definer, which includes:
 - Review Type Alignment
 
 The **Project Configuration Profile** from Setup Wizard, which includes:
-- Target Language
-- Literature Time Span
+- Database-native query language policy
+- Time policy (`multi_window` by default)
 - Writing Type and its strategy weighting
-- Whether Chinese-Language Supplement is enabled
-- Whether Industry Report Supplement is enabled
+- Enabled databases (all six by default)
+- Industry report mode (`template_only` by default)
 
 ## Workflow
 
@@ -51,10 +51,10 @@ The **Project Configuration Profile** from Setup Wizard, which includes:
 Confirm receipt of the Review Scope Confirmation Document. Briefly restate the core research direction and keyword tiers to demonstrate understanding. Then explain the dual-pathway approach to the user:
 
 > ""I have received your review scope. I will now execute two parallel retrieval pathways:
-> - **Search A**: I will call **Query Crafter** to generate ready-to-use advanced search queries for Web of Science, Scopus, IEEE Xplore, Google Scholar, CNKI, and Wanfang (the Chinese databases are enabled by configuration).
+> - **Search A**: I will call **Query Crafter** to generate ready-to-use advanced search queries for Web of Science, Scopus, IEEE Xplore, Google Scholar, CNKI, and Wanfang.
 > - **Search B**: With your explicit network-access consent, I will call **Literature Harvester** to harvest literature metadata from **OpenAlex** and **cross-verify each entry via Crossref by DOI** (filtering out hallucinated/mis-attributed entries — zero keys required).
 >
-> The retrieval focus follows the writing type. For review-oriented work, the strategy prioritizes coverage and synthesis relevance, but it does not restrict all queries to review/survey document types. I will explain Search B's network access and request consent before starting it.""
+> The default general profile keeps A0, A1, B, and review-oriented supplements. Explicit writing requirements only change the recommended order and candidate ranking. I will explain Search B's network access and request consent before starting it.""
 
 ### Step 1.4: 预告 Search B 引擎方案（MANDATORY，置于 Search B 启动前）
 
@@ -95,23 +95,23 @@ Confirm receipt of the Review Scope Confirmation Document. Briefly restate the c
 - **只问一次**：同一次流水线运行内，包括 Search B 子查询与 Retry，复用该授权，不得逐查询重复询问。新项目或新一次独立运行必须重新询问。
 - **允许**：进入 Step 2 + Step 3，可并行执行 Search A 与 Search B。
 - **拒绝**：只进入 Step 2；禁止调用 Literature Harvester、禁止发出任何 OpenAlex/Crossref 请求。记录 `network_access_consent.granted=false` 与 `part_b_status=skipped_by_user`，然后继续交付 Search A 和检索策略包。
-- 该询问是外部网络操作授权，不是 API Key/访问池询问，也不新增 G0–G2 业务决策门。
-- **授权边界**：忽略 G0 配置卡中任何历史版本遗留的“是否联网”“稍后授权”或预测值；它们均不构成授权。有效授权只能由本 Step 1.5 在 Search B 启动前取得。`search_a_all`、`single_platform` 和 `adjust_existing` 直接模式不得进入本步骤。
+- 该询问是外部网络操作授权，不是 API Key/访问池询问，也不计入 G1/G2 人工决策门。
+- **授权边界**：Step 0 的 G0 自动校验不构成联网授权。有效授权只能由本 Step 1.5 在 Search B 启动前取得。`search_a_all`、`single_platform` 和 `adjust_existing` 直接模式不得进入本步骤。
 
 ### Step 2: Execute Search A — Query Crafter
 **⚠️ CRITICAL (No Phantom Actions):** "Invoke the Query Crafter sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue the `Skill` tool call for `query_crafter` in this turn — do NOT merely write "loading Query Crafter" and stop. Invoke the **Query Crafter** sub-skill with the following parameters:
 - Three keyword tiers from the Review Scope Confirmation Document
 - Exclusion keywords (if any)
-- Literature time span from the Project Configuration Profile as structured `start` / `end` years
-- Writing type and derived search focus (`review-priority`, `precision-priority`, `novelty-priority`, or balanced)
+- Time policy from the Project Configuration Profile. `multi_window` keeps Search A queries year-neutral and adds 10/5/2-year database UI presets
+- Writing type and derived search focus (`general` maps to `balanced`)
 
 Query Crafter will automatically activate the appropriate platform-specific sub-skills:
 - `WoS Query Crafter` (always active)
 - `Scopus Query Crafter` (always active)
 - `IEEE Query Crafter` (always active)
 - `Google Scholar Query Crafter` (always active)
-- `CNKI Query Crafter` (active only if Chinese-Language Supplement is enabled)
-- `Wanfang Query Crafter` (active only if Chinese-Language Supplement is enabled)
+- `CNKI Query Crafter` (default active)
+- `Wanfang Query Crafter` (default active)
 
 Receive the compiled multi-platform query package from Query Crafter.
 
@@ -125,14 +125,14 @@ Before continuing, inspect `_meta.query_qa`. `FAIL` blocks delivery: repair the 
 - `tech_terms`：必需技术锚点词列表，对应 `--technology`
 - `task_terms`：任务/应用层词列表，对应 `--task`
 - `exclude_terms`：仅传已确认的 `query_exclusions`；`soft_exclusions` 与 `risky_exclusions` 只作为人工筛选提示
-- Literature time span as `min_year` / `max_year`
+- Per-query time windows from the multi-window policy; do not apply one global minimum year to every gradient
 - Writing type and derived search focus
 - Results limit: 20–25 per sub-query
 - `verify`: `True` (default) — Crossref 逐条验证开启
 - `network_consent`: `True`，对应 CLI `--network-consent`
 - `mailto`: **固定为空**，使用 Crossref 匿名公共池；标准主流程不得提交邮箱或其他个人信息
 
-**受控梯度硬规则：** 默认构造 `OA-Broad`（对象 + 核心技术）、`OA-Topical`（对象 + 核心技术 + 应用任务）和可选的 `OA-Precise`（对象 + 精准任务 + 技术锚点），写入梯度 JSON 后通过 `--gradient-file ... --per-query 25` 一次执行。先汇总、按 DOI 或标题+年份去重，再对唯一 DOI 做 Crossref 验证。不得把相同的三层强制过滤套到每个梯度查询上，否则三个查询会退化为重复请求。结果不足时先询问是否追加一次扩展查询。
+**受控梯度硬规则：** 默认构造 `OA-Broad`（对象 + 核心技术，不限年份）、`OA-Topical`（对象 + 核心技术 + 应用任务，近 10 年）和 `OA-Recent`（对象 + 精准任务 + 技术锚点，近 5 年；开题/基金近 2 年）。将每项独立的 `min_year/max_year` 写入梯度 JSON，通过 `--gradient-file ... --per-query 25` 一次执行。先汇总、按 DOI 或标题+年份去重，再对唯一 DOI 做 Crossref 验证。不得向 CLI 传一个全局 `--min-year` 使三个梯度退化为相同时间窗。结果不足时先询问是否追加一次扩展查询。
 
 只有用户主动要求使用 Crossref polite pool 时，才另行说明会通过 `mailto` 提交其邮箱，并在用户明确同意后传入；此时把 `mailto_submitted` 记录为 `true`。不得把 Step 1.5 的标准授权解释为同意提交邮箱。
 
@@ -198,12 +198,12 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 
 ```json
 {
-  "report_version": "v1.5.2",
+  "report_version": "v1.6.1",
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
-    "search_focus": "review-priority",
-  "time_span": {"start": YYYY, "end": YYYY},
-  "writing_type": "综述",
+    "search_focus": "balanced",
+    "time_policy": {"mode": "multi_window", "presets_years": [10, 5, 2]},
+    "writing_type": "通用检索",
     "core_keywords": {"tier1_species": [...], "tier2_technology": [...], "tier3_application": [...]}
   },
   "part_a_databases": ["WoS", "Scopus", "IEEE", "Google Scholar", "CNKI", "Wanfang"],
@@ -254,7 +254,7 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 **执行流程：**
 1. **读取上游产物**：Step 0 `project_meta.json`（写作类型 / 目标语言 / 目标期刊 / 时间跨度）、Step 1 `scope_definition.md`（三级关键词 + 排除项 + 优先级）、Step 5 保存的 `literature_collection_report_v1.md` + `literature_collection_v1_metadata.json`。
 2. **按模板落盘四项逻辑交付物**（到 Step 5 已解析的 `deliverables_dir`）：
-   - `scope_card.md`：写作类型与策略权重、三级关键词、排除词分级、优先级、G0–G1 确认记录；
+   - `scope_card.md`：写作类型与策略权重、三级关键词、排除词分级、优先级、G0 自动校验与 G1 确认记录；
    - `scope_card.i18n.json`：范围卡另一语言的 Markdown 正文；`source_language` 必须与 `scope_card.md` 一致；
    - `query_pack.md`：Part A 的已启用平台检索式合集与 Query QA 摘要。每条检索式必须放入独立 fenced code block，禁止放进 Markdown 表格；
    - `candidate_list.csv/.md`：Part B 收割的全量候选文献。表格单元格中的 `|` 必须写成 `\|`；
@@ -276,7 +276,7 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 
 **Retrieval Context**:
 - Search Focus: [review-priority / precision-priority / novelty-priority / balanced]
-- Time Span: [Start Year] – [End Year]
+- Time Policy: [No year limit + 10/5/2-year presets | explicit fixed range]
 - Core Keywords: [summary of three tiers]
 
 ---
@@ -341,5 +341,5 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 - **CRITICAL**: Default chat output is a concise summary; complete queries and candidates remain in the deliverables. Expand everything inline only in explicit `audit` mode.
 - **CRITICAL**: Use the user-supplied directory when present; otherwise save to `projects/<active_project_id>/deliverables/` without forcing an extra path question.
 - This skill calls two sub-skills (Query Crafter and Literature Harvester) and merges their outputs. It does not directly generate queries or call APIs.
-- The search focus for Search Strategist V1 is `review-priority` when the Step 0 writing type is 综述; adjust per writing type (论著查准 / 开题基金新颖性).
+- The search focus is `balanced` for the default 通用检索 profile; explicit review/research/proposal/grant types adjust recommendation order without removing A0/A1/B.
 - The search strategy pack delivered at Step 5.5 (scope card + query pack + candidate list + usage guide) is the pipeline's final deliverable and the end of the QueryStrategist flow.

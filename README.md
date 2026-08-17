@@ -1,8 +1,8 @@
 # QueryStrategist（文献检索策略师）
 
-> QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会通过结构化提问明确研究对象、技术方法、任务指标和排除范围，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
+> QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会运用 LLM 语义理解自动识别研究对象、技术方法、任务指标和范围边界，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
 >
-> **版本**：v1.5.2（2026-08-16）
+> **版本**：v1.6.1（2026-08-17）
 
 ![QueryStrategist 检索策略工作台总览](img/product-overview.png)
 
@@ -18,25 +18,25 @@
 2. **跨库检索式构建重复**：WoS / Scopus / IEEE / Google Scholar / CNKI / 万方 6 库语法各异，逐库构建耗时数天（Step 2 Search Strategist V1 · Search A）。
 3. **检索策略缺依据**：候选文献常凭经验筛，缺少跨库收割的量化覆盖与 OA 状态佐证（Step 2 Search Strategist V1 · Search B）。
 
-本套件用**人机协作（human-in-the-loop）**回应：AI 承担规模化执行（关键词收敛、检索式生成、跨库收割），人类在关键决策门拍板（配置 G0 / 范围 G1 / 检索策略交付 G2），最终交付**可复制粘贴的检索策略包**。
+本套件用**人机协作（human-in-the-loop）**回应：AI 承担默认配置、关键词收敛、检索式生成和跨库收割，人类在关键决策门拍板（范围 G1 / 检索策略交付 G2），最终交付**可复制粘贴的检索策略包**。
 
 ---
 
 ## 2. 方案概述
 
-流水线由状态机主控（根 `SKILL.md`，即主 Skill / 编排器）按 **Step 0–2** 顺序串联 3 个子模块，每步结束设强制人工确认门（G0–G2）。本仓库采用可直接发布的单包结构：根 `SKILL.md` 是唯一入口，11 个子模块以 `SKILL.sub.md` 保存并由主 Skill 读取执行。
+流水线由状态机主控（根 `SKILL.md`，即主 Skill / 编排器）按 **Step 0–2** 顺序串联 3 个子模块。G0 是内部自动校验，人工业务门只保留范围确认 G1 与交付确认 G2；Search B 联网前另行请求一次授权。本仓库采用可直接发布的单包结构：根 `SKILL.md` 是唯一入口，11 个子模块以 `SKILL.sub.md` 保存并由主 Skill 读取执行。
 
 | Step | 子 Skill | 关键产出 | 主导方 |
 |:--:|:--|:--|:--:|
-| 0 | Setup Wizard | 项目配置 + 写作类型 + 目标语言/期刊 + 时间跨度 | 人机协作 |
-| 1 | Scope Definer | 三级关键词体系 + 排除项 + 优先级 | 人机协作 |
+| 0 | Setup Wizard | 零配置建档 + 六库默认配置 + G0 自动校验 | AI 主导 |
+| 1 | Scope Definer | 自动范围卡 + 三级关键词体系 + G1 确认 | 人机协作 |
 | 2 | Search Strategist V1 | 6 库检索式（查全 A + 查准 B）+ API 自动收割（OpenAlex 收割 + Crossref 按 DOI 逐条验证去幻觉） | AI 主导 |
 
 **本提交终点 = Step 2 后的「检索策略包」**：范围界定卡 + 多平台检索式合集 + 文献候选清单 + 使用说明。它诚实交付「AI 最擅长的检索策略生成」，把写作决策留给研究者。
 
 ![QueryStrategist 完整工作流程](img/workflow.png)
 
-*完整流程通过 G0-G2 人工决策门保留研究者的控制权；Search B 仅在明确授权后访问 OpenAlex 和 Crossref。*
+*完整流程通过 G1、G2 人工决策门保留研究者的控制权；G0 为内部自动校验，Search B 仅在明确授权后访问 OpenAlex 和 Crossref。*
 
 ---
 
@@ -45,7 +45,7 @@
 1. **意图 → 策略的结构化转化**：Scope Definer 通过结构化提问把模糊研究方向收敛为「对象层 + 必需技术锚点/支持方法 + 任务层 + 排除词分级」，并为中文数据库保留独立中文词表，再机械化为 6 库高级检索式。宽泛排除词默认降级为人工筛选提示，避免 `NOT` 误杀。
 2. **按写作类型调策略权重**：综述查全优先、研究论著查准优先、开题/基金兼顾新颖性，不同写作类型对应不同的检索式版本与候选清单排序——LLM 比数据库自带 Query Builder 强的地方。
 3. **双通道检索**：Search A 产出可手填的 6 库检索式；Search B 在用户明确授权后调用公开 API 自动收割元数据，两条通道互为校验。拒绝联网授权时 Search A 仍正常交付。
-4. **人机闸门（负责任 AI）**：3 个强制决策门（G0–G2），AI 只呈客观事实与策略，范围与检索策略确认始终由人类掌握。
+4. **少打断的人机协作**：取消七项启动配置问答；G0 自动校验，用户仅在 G1 确认范围、G2 确认交付。明确输入始终覆盖系统默认值。
 5. **零密钥、需授权、去幻觉的 API 收割**：联网前只请求一次授权，说明将访问 `api.openalex.org` 与 `api.crossref.org`；不下载全文，标准流程使用 Crossref 匿名公共池且不提交个人信息。验证不通过的疑似幻觉/错配条目标记 `dropped` 剔除。
 6. **API 配额守卫（MANDATORY）**：收割脚本内置分端点请求预算、429 熔断、Retry-After 上限、响应缓存、dry-run 与失败统计。
 7. **受控梯度收割与先去重后验证**：Search B 默认执行 2-3 个 OpenAlex 梯度查询，每个 20-25 条；合并后按 DOI 或标题+年份去重，再对唯一 DOI 调用 Crossref。结果不足时由用户决定是否追加一次扩展查询。
@@ -80,8 +80,8 @@
 
 ## 5. 使用方式
 
-- **完整流程**：调用根 `SKILL.md`（主 Skill），Step 0 逐项配置写作类型与目标语言/期刊；入口已提供研究方向时只记录并复用该方向，不代填其他配置。Step 1 收敛范围（G1 确认），Step 2 在 Search B 联网前请求一次授权，再执行双通道检索并交付检索策略包（G2 确认）。拒绝授权时只跳过 Search B，Search A 与策略包继续。
-- **直接模式**：可只生成六库 Search A、只生成某个平台，或调宽/调窄已有检索式。直接模式只询问生成所需的最小范围信息，不执行完整 G0–G2，不访问 OpenAlex/Crossref；各子模块仍由根 `SKILL.md` 按入口路由规则读取执行。
+- **完整流程**：调用根 `SKILL.md`（主 Skill）并提供研究方向。Step 0 自动建立通用检索、六库启用和多时间窗默认配置，G0 内部校验后直接进入 Step 1；Step 1 自动生成范围卡并在 G1 让用户一次确认。Step 2 在 Search B 联网前请求授权，再执行双通道检索并交付检索策略包（G2 确认）。拒绝授权时只跳过 Search B，Search A 与策略包继续。
+- **直接模式**：可只生成六库 Search A、只生成某个平台，或调宽/调窄已有检索式。直接模式只询问生成所需的最小范围信息，不执行完整状态机或 Search B，不访问 OpenAlex/Crossref；各子模块仍由根 `SKILL.md` 按入口路由规则读取执行。
 
 ---
 
@@ -104,8 +104,8 @@ QueryStrategist/
 ├── scopus_query_crafter/                    # Scopus
 ├── ieee_query_crafter/                      # IEEE Xplore
 ├── google_scholar_query_crafter/            # Google Scholar
-├── cnki_query_crafter/                      # 中国知网（中文补充）
-├── wanfang_query_crafter/                   # 万方（中文补充）
+├── cnki_query_crafter/                      # 中国知网
+├── wanfang_query_crafter/                   # 万方
 ├── literature_harvester/                    # API 收割 + 验证（OpenAlex 收割 / Crossref 逐条验证）
 └── _shared_tools/                           # 运行与校验脚本
 ```

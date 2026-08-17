@@ -1,12 +1,12 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：v1.5.2（以根目录 VERSION 为准）
+版本：v1.6.1（以根目录 VERSION 为准）
 
 ## 快速开始
 
 1. **入口**：对任意支持 Skill 的 Agent 说「**开始文献检索**」或「**Start QueryStrategist**」。
-2. **Step 0**：Setup Wizard 逐项配置写作类型（综述/研究论著/学位论文/开题报告/基金申请/调研报告/自定义）+ 目标语言 + 目标期刊 + 时间跨度 + 中文补充（G0 确认）。入口已提供研究方向时只记录并复用方向，不得代填其他配置或直接跳到 G0。
-3. **Step 1**：Scope Definer 通过结构化提问收敛为三级关键词体系（对象层 + 必需技术锚点/支持方法 + 任务层）+ 中英文排除词分级 + 优先级（G1 确认）。只有确认的强排除进入 `NOT`。
+2. **Step 0**：Setup Wizard 在取得研究方向后自动建档，默认写作类型为通用检索、启用六库、采用多时间窗筛选预设，并完成 G0 内部校验。目标语言、目标期刊、写作类型、期刊层级、时间范围、中文文献和行业报告均不逐项询问；用户明确输入覆盖默认值。
+3. **Step 1**：Scope Definer 自动生成三级关键词体系（对象层 + 必需技术锚点/支持方法 + 任务层）、中文词表和宽范围卡，在 G1 仅确认一次。自动推断的排除词不得进入 `NOT`，只有用户明确的强排除可进入。
 4. **Step 2**：Search Strategist V1 双通道 —— Search A（六库 A0/A1/B 与 Query QA，`FAIL` 必须修复）+ Search B（联网授权后执行 2-3 个 OpenAlex 梯度查询，每个 20-25 条，合并去重后再由 Crossref 验证）→ 交付**检索策略包**。拒绝联网授权时只跳过 Search B。默认目录为 `projects/<active_project_id>/deliverables/`，默认只在聊天展示摘要，并优先打开唯一入口 `index.html`；审计模式才完整展开。
 
 ## 目录清单
@@ -27,8 +27,8 @@ QueryStrategist/
 ├── scopus_query_crafter/        # Scopus
 ├── ieee_query_crafter/          # IEEE Xplore
 ├── google_scholar_query_crafter/   # Google Scholar
-├── cnki_query_crafter/          # 中国知网（中文补充）
-├── wanfang_query_crafter/       # 万方（中文补充）
+├── cnki_query_crafter/          # 中国知网
+├── wanfang_query_crafter/       # 万方
 ├── literature_harvester/        # API 收割 + 验证（OpenAlex 收割 / Crossref 逐条验证）
 └── _shared_tools/               # 运行与校验脚本
 ```
@@ -58,5 +58,5 @@ QueryStrategist/
 
 - **收割 ≠ 语料**：API 收割的元数据仅作候选下载清单，绝不自动进入下游当作全文语料；需用户自行下载验证。
 - **检索策略需平台验证**：检索式命中量级为预估，最终以各数据库实际检索结果为准。
-- **决策门**：G0–G2 为强制人工确认点，AI 不替人类做范围与检索策略的最终决定。
+- **决策门**：G0 为内部自动校验；G1 与 G2 是人工业务确认点。Search B 联网授权独立请求，不计入业务决策门。
 - **项目状态校验**：对具体项目运行 `python _shared_tools/scripts/validate_pipeline_state.py --project projects/<id>`，确认 `project_meta.json`、`pipeline_state/config.json` 和结构化年份字段完整。

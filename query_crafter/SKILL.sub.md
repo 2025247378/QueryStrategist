@@ -4,7 +4,7 @@ description: "检索式构建总控 | 自动调用全部6个平台子skill（WoS
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.5.2
+  version: v1.6.1
   keywords: [search query, database, orchestration, QueryStrategist]
   triggers: [检索式, query crafter, 检索式总控, 多平台检索]
 ---
@@ -95,8 +95,8 @@ You have access to the following platform-specific Query Crafter sub-skills. Eac
 | `Scopus Query Crafter` | Scopus | Always active |
 | `IEEE Query Crafter` | IEEE Xplore | Always active |
 | `Google Scholar Query Crafter` | Google Scholar | Always active |
-| `CNKI Query Crafter` | 中国知网 (CNKI) | Active only if Chinese-Language Supplement is enabled |
-| `Wanfang Query Crafter` | 万方数据 (Wanfang) | Active only if Chinese-Language Supplement is enabled |
+| `CNKI Query Crafter` | 中国知网 (CNKI) | Full pipeline and `search_a_all` always active unless the user explicitly opts out |
+| `Wanfang Query Crafter` | 万方数据 (Wanfang) | Full pipeline and `search_a_all` always active unless the user explicitly opts out |
 
 ## Workflow
 
@@ -104,16 +104,16 @@ You have access to the following platform-specific Query Crafter sub-skills. Eac
 First inspect `direct_request.mode`. In full-pipeline mode, parse the confirmed Review Scope Confirmation Document and Project Configuration Profile. In direct mode, apply the Direct Request Contract, preserve source markers, and ask only for missing information that blocks query generation. Determine:
 - The three keyword tiers (Species, Technology, Application)
 - The exclusion classification and the confirmed `query_exclusions`
-- The literature time span (start / end)
+- The time policy (`multi_window` by default; `fixed` only when explicitly requested)
 - The writing type and its strategy weighting
-- Whether Chinese-Language Supplement is enabled
+- The enabled database list; full pipeline defaults to all six databases
 
 ### Step 2: Activate Sub-Skills
 Based on the analysis, determine which sub-skills to activate:
 
 | Condition | Activated Skills |
 |:---|:---|
-| Full pipeline | WoS, Scopus, IEEE Xplore, Google Scholar；配置启用中文补充时再加 CNKI、万方 |
+| Full pipeline | WoS、Scopus、IEEE Xplore、Google Scholar、CNKI、万方全部启用；仅尊重用户明确的平台排除要求 |
 | `search_a_all` | WoS、Scopus、IEEE Xplore、Google Scholar、CNKI、万方全部启用 |
 | `single_platform` | 仅启用用户明确指定的平台 |
 | `adjust_existing` | 仅启用已识别并经必要确认的平台 |
@@ -124,10 +124,10 @@ For each activated sub-skill, prepare a standardized input package containing:
 - Optional object/task recall anchors (`tier1_recall_anchor` / `tier3_recall_anchor`), required technology anchors (`tier2_required_anchor`), and supporting methods (`tier2_supporting_method`)
 - Chinese database tiers (`keyword_tiers_zh`) and confirmed Chinese query exclusions (`query_exclusions_zh`) when CNKI/Wanfang are enabled
 - Only `query_exclusions` may be passed into platform query generators. `soft_exclusions` and `risky_exclusions` remain screening notes and warnings; they must not be converted mechanically into `NOT`.
- - Literature time span (start / end)
- - Writing type (review, research, thesis, proposal, grant, report, or custom)
+ - Time policy: `multi_window` means no year clause in Search A and 10/5/2-year UI filter presets; `fixed` means pass the explicit start/end only to usage instructions
+ - Writing type (general, review, research, thesis, proposal, grant, report, or custom)
  - Search focus: derived from writing type (review-priority, precision-priority, novelty-priority, or balanced)
- - Date handling: pass the selected year range to database UI/filter instructions; do not invent a year range
+ - Date handling: A0 never contains a year clause. For `multi_window`, keep all query strings year-neutral and show filter presets in the database usage notes
 
 ### Step 4: Delegate and Compile
 **⚠️ CRITICAL (No Phantom Actions):** "Call each activated sub-skill" is a TOOL-CALL DIRECTIVE. You MUST issue a `Skill` tool call for EACH activated platform sub-skill (e.g. `Skill: "wos_query_crafter"`, `Skill: "scopus_query_crafter"`, …) — do NOT merely say "now calling the sub-skills" and stop. Call each activated sub-skill with its input package. Wait for all sub-skills to return their outputs. Compile all generated queries into a single organized report.
@@ -153,7 +153,7 @@ Present the compiled queries, grouped by database. For each database, include:
 ### Multi-Platform Search Query Package
 
 **Search Context**: [review-priority / precision-priority / novelty-priority / balanced]
-**Time Span**: [Start Year] – [End Year]
+**Time Policy**: [No year limit in query; UI presets: last 10 / 5 / 2 years | explicit fixed range]
 
 ---
 
@@ -192,7 +192,6 @@ Present the compiled queries, grouped by database. For each database, include:
 ---
 
 #### CNKI (中国知网)
-*(Only if Chinese-Language Supplement is enabled)*
 `
 [Query]
 `
@@ -201,7 +200,6 @@ Present the compiled queries, grouped by database. For each database, include:
 ---
 
 #### Wanfang (万方数据)
-*(Only if Chinese-Language Supplement is enabled)*
 `
 [Query]
 `
