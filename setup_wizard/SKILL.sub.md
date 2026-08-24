@@ -4,7 +4,7 @@ description: "QueryStrategist 零配置启动模块 | 自动检测交互语言�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.6.1
+  version: v1.6.3
   keywords: [literature search, zero-config, setup, full coverage, QueryStrategist]
   triggers: [文献检索配置, 检索设置, setup, 开始配置]
 ---

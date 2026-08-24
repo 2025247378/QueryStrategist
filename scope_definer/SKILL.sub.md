@@ -4,7 +4,7 @@ description: "QueryStrategist 范围界定模块 | 从研究方向自动构建�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.6.1
+  version: v1.6.3
   keywords: [research scope, keyword tiers, exclusions, fast confirmation, QueryStrategist]
   triggers: [研究范围, 范围界定, 关键词体系, scope]
 ---

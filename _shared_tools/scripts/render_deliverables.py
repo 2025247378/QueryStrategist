@@ -29,6 +29,8 @@ BILINGUAL_SIDECARS = {
     "scope_card": "scope_card.i18n.json",
     "usage_guide": "usage_guide.i18n.json",
 }
+CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+ALLOWED_CJK_PLATFORM_LABELS = {"万方", "万方数据", "中国知网"}
 
 PROSE_REPLACEMENTS = {
     "✅": "[已验证]",
@@ -399,6 +401,96 @@ def _normalize_language(value):
     raise ValueError(f"unsupported bilingual content language: {value!r}")
 
 
+def _heading_levels(markdown_text):
+    return [
+        len(match.group(1))
+        for match in re.finditer(r"^(#{1,6})\s+\S.*$", markdown_text, re.M)
+    ]
+
+
+def _list_signature(markdown_text):
+    unordered = len(re.findall(r"^\s*[-*]\s+\S", markdown_text, re.M))
+    ordered = len(re.findall(r"^\s*\d+\.\s+\S", markdown_text, re.M))
+    return unordered, ordered
+
+
+def _fence_count(markdown_text):
+    return sum(1 for line in markdown_text.splitlines() if line.lstrip().startswith("```"))
+
+
+def _visible_markdown_text(value):
+    value = re.sub(r"`[^`]*`", "", value)
+    value = re.sub(r"\[[^\]]*\]\([^)]+\)", "", value)
+    value = re.sub(r"https?://\S+", "", value)
+    return re.sub(r"[*_>#]", "", value).strip()
+
+
+def _validate_english_translation(markdown_text, sidecar_path):
+    residuals = []
+    tables = _markdown_tables(markdown_text)
+    for table_index, (headers, rows) in enumerate(tables, start=1):
+        for header in headers:
+            if CJK_RE.search(_visible_markdown_text(header)):
+                residuals.append(f"table {table_index} header {header!r}")
+        for row_index, row in enumerate(rows, start=1):
+            label = _visible_markdown_text(row[0] if row else "")
+            for column_index, cell in enumerate(row, start=1):
+                visible = _visible_markdown_text(cell)
+                if not CJK_RE.search(visible):
+                    continue
+                if visible in ALLOWED_CJK_PLATFORM_LABELS:
+                    continue
+                keyword_value = column_index > 1 and re.search(
+                    r"object|species|technology|method|task|keyword|exclusion|term",
+                    label,
+                    re.I,
+                )
+                if keyword_value:
+                    continue
+                residuals.append(
+                    f"table {table_index} row {row_index} column {column_index} {visible!r}"
+                )
+
+    in_code = False
+    for line_number, line in enumerate(markdown_text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code or not stripped or stripped.startswith("|"):
+            continue
+        visible = _visible_markdown_text(stripped)
+        if len(CJK_RE.findall(visible)) >= 4:
+            residuals.append(f"line {line_number} {visible!r}")
+    if residuals:
+        preview = "; ".join(residuals[:5])
+        raise ValueError(
+            f"{sidecar_path} English translation contains untranslated Chinese structure/prose: {preview}"
+        )
+
+
+def _validate_translation_pair(source_markdown, translated_markdown, language, sidecar_path):
+    if _heading_levels(source_markdown) != _heading_levels(translated_markdown):
+        raise ValueError(f"{sidecar_path} translation {language!r} heading structure differs from source")
+    source_tables = _markdown_tables(source_markdown)
+    translated_tables = _markdown_tables(translated_markdown)
+    if len(source_tables) != len(translated_tables):
+        raise ValueError(f"{sidecar_path} translation {language!r} table count differs from source")
+    for index, ((source_headers, source_rows), (target_headers, target_rows)) in enumerate(
+        zip(source_tables, translated_tables), start=1
+    ):
+        if len(source_headers) != len(target_headers) or len(source_rows) != len(target_rows):
+            raise ValueError(
+                f"{sidecar_path} translation {language!r} table {index} shape differs from source"
+            )
+    if _list_signature(source_markdown) != _list_signature(translated_markdown):
+        raise ValueError(f"{sidecar_path} translation {language!r} list structure differs from source")
+    if _fence_count(source_markdown) != _fence_count(translated_markdown):
+        raise ValueError(f"{sidecar_path} translation {language!r} code block count differs from source")
+    if language == "en":
+        _validate_english_translation(translated_markdown, sidecar_path)
+
+
 def _load_bilingual_content(directory, page_key, source_markdown):
     sidecar_name = BILINGUAL_SIDECARS.get(page_key)
     if not sidecar_name:
@@ -432,6 +524,9 @@ def _load_bilingual_content(directory, page_key, source_markdown):
             raise ValueError(
                 f"{sidecar_path} translation {language!r} must contain an H1 heading"
             )
+        _validate_translation_pair(
+            source_markdown, normalized_markdown, normalized_language, sidecar_path
+        )
         documents[normalized_language] = normalized_markdown
     if set(documents) != {"zh", "en"}:
         raise ValueError(
@@ -507,6 +602,10 @@ def process_directory(
         bilingual_content, sidecar_path = _load_bilingual_content(
             directory, key, normalized_files[key]
         )
+        if key in BILINGUAL_SIDECARS and sidecar_path is None:
+            raise ValueError(
+                f"missing required bilingual sidecar: {directory / BILINGUAL_SIDECARS[key]}"
+            )
         _write_bom(
             html_path,
             markdown_to_html(
