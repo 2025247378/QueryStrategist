@@ -13,7 +13,8 @@
 
 ```
 QueryStrategist/
-├── README.md                    # 提交文档
+├── README.md                    # English documentation (default)
+├── README.zh-CN.md              # 中文说明
 ├── RUN.md                       # 本文件
 ├── LICENSE                      # MIT
 ├── VERSION                      # 当前正式版本

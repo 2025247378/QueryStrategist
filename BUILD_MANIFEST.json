@@ -83,11 +83,15 @@
     },
     {
       "path": "README.md",
-      "sha256": "aa3df8965c3f786a5af0a6de1b800898d4e12475be6569e1a8202cfb6b2c926b"
+      "sha256": "8488e85ec989c87efd6c4a41c1bc067fcd43b6ee3a6590b3a7762837c30240e5"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "sha256": "0a707edb5814e2651af6f33ec0e3fdbc65ec91e4999b5bc9a51f682abf72eff3"
     },
     {
       "path": "RUN.md",
-      "sha256": "eab76d794f13d2dbd132cee2edeb111914e084f9d504b312c75ee171a56d8243"
+      "sha256": "0bdb9ec99affb572063e9530df7c3c2485e841f2b702fb8330eb8256d6a5a355"
     },
     {
       "path": "scope_definer/SKILL.sub.md",
