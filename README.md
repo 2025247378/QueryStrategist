@@ -1,10 +1,12 @@
-# QueryStrategist: From a Research Idea to Executable Search Strategies
+# QueryStrategist: An LLM-Powered Literature Search Skill
 
-> An interactive literature-search Skill for researchers. Turn a natural-language research direction into reusable, checkable, and traceable search strategies for six major databases.
+> Turn a natural-language research direction into reusable, checkable, and traceable academic search strategies for six major databases.
 
 > [中文说明](README.zh-CN.md)
 
 > **Version**: v1.6.3 (2026-08-24)
+
+QueryStrategist is an interactive **AI agent skill for literature search, scholarly information retrieval, and research workflow support**. It uses LLM semantic understanding to structure a research idea, generate platform-specific queries, and optionally collect candidate metadata through OpenAlex and Crossref.
 
 ![QueryStrategist search strategy workbench](img/product-overview.png)
 
