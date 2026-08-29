@@ -1,6 +1,7 @@
 """Offline HTML shell and interactions for QueryStrategist deliverables."""
 
 import html
+import re
 
 
 PAGE_META = {
@@ -117,7 +118,7 @@ home_kicker:'QUERYSTRATEGIST / 离线检索工作台',home_lead:'从研究范围
 scope_title:'研究范围',scope_desc:'确认对象、技术、任务、排除项与检索边界。',queries_title:'六库检索式合集',queries_desc:'按数据库查看、复制并验证检索式。',candidates_title:'候选文献清单',candidates_desc:'搜索、筛选和排序 API 收割的待核验文献。',guide_title:'检索使用说明',guide_desc:'查看各平台填入位置以及调宽、调窄方法。',
  query_document_title:'六库检索式合集',candidate_document_title:'候选文献清单',search_context:'检索重点：{focus}',time_policy:'时间策略：{timeSpan}',query_qa_summary:'Query QA：{status}。详细警告与修复记录请查看各平台说明。',query_usage:'使用方式：先运行 A0 检查召回，再以 A1 作为主题主检索；结果过多时使用 B 或平台专属精准式，并在数据库界面中设置 {timeSpan} 年份筛选（如平台支持）。',focus_balanced:'均衡检索',focus_review:'综述优先',focus_precision:'查准优先',focus_novelty:'新颖性优先',database_tabs:'数据库',variant_tabs:'检索式层级',variant_a0:'A0 高召回基线',variant_a1:'A1 主题检索',variant_b:'B 精准检索',variant_c:'C 出版物定向',variant_d1:'D1 邻近检索 NEAR',variant_d2:'D2 邻近检索 ONEAR',variant_review_oriented:'E 综述导向',variant_review:'综述检索',recommended:'推荐',query_fallback:'检索式 {number}',copy_query:'复制检索式',copy:'复制',copied:'已复制',copy_failed:'复制失败',qa_notice:'最终仍以数据库官网解析和命中结果为准。',document_fallback:'检索策略包',
  candidate_boundary_intro:'候选清单仅用于人工筛选，不是最终纳入文献。OpenAlex 候选经 DOI 去重后由 Crossref 核验；是否下载全文和纳入研究仍需人工判断。',retrieval_stats_title:'收割与核验统计',harvested_list_title:'候选文献列表',excluded_examples_title:'剔除示例',candidate_verification_summary:'验证通过：{verified} 篇 / 待人工核验：{pending} 篇 / 验证剔除：{dropped} 篇',metric_label:'指标',value_label:'数值',metric_harvested_raw:'原始收割量',metric_deduplicated:'去重后候选',metric_duplicates_removed:'移除重复项',metric_verified:'已验证',metric_unverified:'待人工核验',metric_dropped:'已剔除',total_candidates:'候选总数',verified:'已验证',pending:'待人工核验',dropped:'已剔除',unknown:'未知',not_open_access:'非开放获取',search_label:'标题、作者或 DOI',search_placeholder:'搜索候选文献',verification_status:'验证状态',oa_status:'OA 状态',all:'全部',start_year:'起始年份',end_year:'截止年份',verified_only:'仅看已验证',clear_filters:'清除筛选',empty_candidates:'没有符合当前筛选条件的候选文献。',showing_count:'当前显示 {visible} / {total} 条',sort_by:'按{label}排序',field:'字段',
-header_no:'序号',header_title:'题名',header_first_author:'第一作者',header_authors:'作者',header_year:'年份',header_source:'来源',header_doi:'DOI',header_status:'核验状态',header_oa:'开放获取状态',header_abstract:'摘要',header_keywords:'关键词'
+header_no:'序号',header_title:'题名',header_first_author:'第一作者',header_authors:'作者',header_year:'年份',header_source:'来源',header_doi:'DOI',header_status:'核验状态',header_oa:'开放获取状态',header_abstract:'摘要',header_keywords:'关键词',inherited_step0:'【继承自 Step 0】',not_recorded:'未记录',status_unmarked:'未标注'
 },
 en:{
 page_index_title:'Search Strategy Package',page_scope_card_title:'Research Scope',page_query_pack_title:'Multi-Database Query Pack',page_candidate_list_title:'Candidate Literature List',page_usage_guide_title:'Search Guide',
@@ -127,7 +128,7 @@ home_kicker:'QUERYSTRATEGIST / OFFLINE SEARCH WORKBENCH',home_lead:'Review the r
 scope_title:'Research Scope',scope_desc:'Confirm the subject, methods, tasks, exclusions, and search boundaries.',queries_title:'Multi-Database Query Pack',queries_desc:'Review, copy, and validate queries by database.',candidates_title:'Candidate Literature List',candidates_desc:'Search, filter, and sort API-harvested records awaiting verification.',guide_title:'Search Guide',guide_desc:'See where to paste each query and how to broaden or narrow it.',
  query_document_title:'Multi-Database Query Pack',candidate_document_title:'Candidate Literature List',search_context:'Search focus: {focus}',time_policy:'Time policy: {timeSpan}',query_qa_summary:'Query QA: {status}. Review the per-platform notes for detailed warnings and fixes.',query_usage:'Usage: start with A0 to check recall, use A1 as the main topical query, and move to B or a platform-specific precision query when results are broad. Apply the {timeSpan} year filter in the database UI where supported.',focus_balanced:'Balanced',focus_review:'Review Priority',focus_precision:'Precision Priority',focus_novelty:'Novelty Priority',database_tabs:'Databases',variant_tabs:'Query levels',variant_a0:'A0 Recall Baseline',variant_a1:'A1 Topical Search',variant_b:'B Precision Search',variant_c:'C Publication Targeting',variant_d1:'D1 Proximity Search NEAR',variant_d2:'D2 Ordered Proximity ONEAR',variant_review_oriented:'E Review-Oriented',variant_review:'Review Search',recommended:'Recommended',query_fallback:'Query {number}',copy_query:'Copy query',copy:'Copy',copied:'Copied',copy_failed:'Copy failed',qa_notice:'Always confirm parsing and result counts on the official database website.',document_fallback:'Search Strategy Package',
  candidate_boundary_intro:'Candidate records are provided for manual screening and are not the final included literature. OpenAlex candidates are deduplicated by DOI and checked through Crossref; full-text download and inclusion remain human decisions.',retrieval_stats_title:'Harvest and Verification Statistics',harvested_list_title:'Candidate Literature List',excluded_examples_title:'Excluded Examples',candidate_verification_summary:'Verified: {verified} / Manual review: {pending} / Excluded: {dropped}',metric_label:'Metric',value_label:'Value',metric_harvested_raw:'Harvested raw',metric_deduplicated:'Deduplicated candidates',metric_duplicates_removed:'Duplicates removed',metric_verified:'Verified',metric_unverified:'Manual review',metric_dropped:'Excluded',total_candidates:'Total Candidates',verified:'Verified',pending:'Manual Review',dropped:'Excluded',unknown:'Unknown',not_open_access:'Not Open Access',search_label:'Title, author, or DOI',search_placeholder:'Search candidate records',verification_status:'Verification Status',oa_status:'OA Status',all:'All',start_year:'Start Year',end_year:'End Year',verified_only:'Verified Only',clear_filters:'Clear Filters',empty_candidates:'No candidate records match the current filters.',showing_count:'Showing {visible} of {total} records',sort_by:'Sort by {label}',field:'Field',
-header_no:'No.',header_title:'Title',header_first_author:'First Author',header_authors:'Authors',header_year:'Year',header_source:'Source',header_doi:'DOI',header_status:'Verification Status',header_oa:'OA Status',header_abstract:'Abstract',header_keywords:'Keywords'
+header_no:'No.',header_title:'Title',header_first_author:'First Author',header_authors:'Authors',header_year:'Year',header_source:'Source',header_doi:'DOI',header_status:'Verification Status',header_oa:'OA Status',header_abstract:'Abstract',header_keywords:'Keywords',inherited_step0:'[Inherited from Step 0]',not_recorded:'Not recorded',status_unmarked:'Unmarked'
 }};
 function initialLanguage(){const requested=new URLSearchParams(window.location.search).get('lang');if(requested==='en'||requested==='zh')return requested;try{const saved=localStorage.getItem('qs-interface-language');if(saved==='en'||saved==='zh')return saved}catch(error){}return'zh'}
 let currentLanguage=initialLanguage();
@@ -154,7 +155,8 @@ function candidateColumnLayout(){const article=document.querySelector('[data-pag
 document.addEventListener('DOMContentLoaded',candidateColumnLayout);
 function updateCandidateInterface(){document.querySelectorAll('[data-status-value]').forEach(badge=>{const key=badge.dataset.statusValue;badge.textContent=t(key)});document.querySelectorAll('.sort-button').forEach(button=>{const label=button.dataset.headerKey?t(button.dataset.headerKey):button.dataset.originalLabel;button.textContent=label;button.title=t('sort_by',{label});const column=Number(button.dataset.column);document.querySelectorAll('[data-page="candidate_list"] tbody tr').forEach(row=>{if(row.cells[column])row.cells[column].dataset.label=label})})}
 function updateDocumentKicker(){const kicker=document.querySelector('.doc-kicker [data-page-label]');if(kicker)kicker.textContent=t(pageNavKey(kicker.dataset.pageLabel))}
-function applyLanguage(language){currentLanguage=language==='en'?'en':'zh';document.documentElement.lang=currentLanguage==='en'?'en':'zh-CN';try{localStorage.setItem('qs-interface-language',currentLanguage)}catch(error){}updateBilingualContent();translateMarkedElements();updateVariantLabels();updateCopyButtons();updateCandidateInterface();updateDocumentKicker();updateLanguageLinks();const button=document.querySelector('#language-toggle');if(button){const key=currentLanguage==='zh'?'switch_english':'switch_chinese';button.title=t(key);button.setAttribute('aria-label',t(key));button.querySelector('.language-code').textContent=currentLanguage==='zh'?'EN':'中'}const titleKey=document.body.dataset.titleKey||'page_index_title';document.title=t(titleKey)+' | QueryStrategist';window.dispatchEvent(new CustomEvent('qs:languagechange',{detail:{language:currentLanguage}}))}
+function updateHomeStatus(){document.querySelectorAll('[data-home-status]').forEach(badge=>{if(badge.dataset.homeStatus==='unmarked')badge.textContent=t('status_unmarked')})}
+function applyLanguage(language){currentLanguage=language==='en'?'en':'zh';document.documentElement.lang=currentLanguage==='en'?'en':'zh-CN';try{localStorage.setItem('qs-interface-language',currentLanguage)}catch(error){}updateBilingualContent();translateMarkedElements();updateVariantLabels();updateCopyButtons();updateCandidateInterface();updateHomeStatus();updateDocumentKicker();updateLanguageLinks();const button=document.querySelector('#language-toggle');if(button){const key=currentLanguage==='zh'?'switch_english':'switch_chinese';button.title=t(key);button.setAttribute('aria-label',t(key));button.querySelector('.language-code').textContent=currentLanguage==='zh'?'EN':'中'}const titleKey=document.body.dataset.titleKey||'page_index_title';document.title=t(titleKey)+' | QueryStrategist';window.dispatchEvent(new CustomEvent('qs:languagechange',{detail:{language:currentLanguage}}))}
 function slug(text,index){return text.trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g,'-').replace(/^-|-$/g,'')||'section-'+index}
 function links(){document.querySelectorAll('a[href^="http"]').forEach(a=>{a.target='_blank';a.rel='noopener noreferrer'})}
 function setTabs(buttons,panels,active){buttons.forEach((button,index)=>{const selected=index===active;button.classList.toggle('active',selected);button.setAttribute('aria-selected',selected?'true':'false');button.tabIndex=selected?0:-1;panels[index].hidden=!selected})}
@@ -187,7 +189,10 @@ def _navigation(active_page, available_pages):
 
 
 def _status_badge(value):
-    normalized = str(value or "未标注").upper()
+    raw = str(value or "未标注").strip()
+    if raw in {"", "未标注", "UNMARKED"}:
+        return '<span class="status-badge status-neutral" data-home-status="unmarked">未标注</span>'
+    normalized = raw.upper()
     css_class = {
         "PASS": "status-pass",
         "WARNING": "status-warning",
@@ -198,9 +203,29 @@ def _status_badge(value):
 
 def _writing_type_markup(value):
     text = str(value or "未记录").strip()
+    provenance = ""
+    match = re.search(r"\s*(【继承自\s*Step\s*0】|\[Inherited from\s+Step\s+0\])\s*$", text, re.I)
+    if match:
+        text = text[: match.start()].strip() or "未记录"
+        provenance = '<span data-i18n="inherited_step0">【继承自 Step 0】</span>'
     i18n_key = WRITING_TYPE_I18N.get(" ".join(text.casefold().split()))
     attribute = f' data-i18n="{i18n_key}"' if i18n_key else ""
-    return f"<b{attribute}>{html.escape(text)}</b>"
+    return f"<b{attribute}>{html.escape(text)}</b>{provenance}"
+
+
+def _fallback_markup(value, i18n_key, fallback):
+    text = str(value or "").strip()
+    if not text or text in {fallback, "未记录", "Not recorded"}:
+        return f'<b data-i18n="{i18n_key}">{html.escape(fallback)}</b>'
+    return f"<b>{html.escape(text)}</b>"
+
+
+def _project_title_markup(value):
+    text = str(value or "检索策略包").strip()
+    if text in {"检索策略包", "Search Strategy Package"}:
+        return '<span data-i18n="document_fallback">检索策略包</span>'
+    # Research titles are user data: keep them unchanged in both interface languages.
+    return f'<span data-project-title="true">{html.escape(text)}</span>'
 
 
 def shell(title, content, page_key, available_pages, home=False, summary=None):
@@ -218,7 +243,9 @@ def shell(title, content, page_key, available_pages, home=False, summary=None):
     )
     language_button = (
         f'<button id="language-toggle" class="language-button" type="button" '
-        f'title="切换为英文界面" aria-label="切换为英文界面">{ICONS["globe"]}'
+        f'title="切换为英文界面" aria-label="切换为英文界面" '
+        'data-i18n-title="switch_english" data-i18n-aria-label="switch_english">'
+        f'{ICONS["globe"]}'
         '<span class="language-code" aria-hidden="true">EN</span></button>'
     )
     title_key = {
@@ -252,14 +279,15 @@ def shell(title, content, page_key, available_pages, home=False, summary=None):
         '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
         "style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:\">"
         f"<title>{html.escape(title)} | QueryStrategist</title><style>{CSS}</style></head>"
-        f'<body data-title-key="{title_key}"><a class="skip-link" href="#main-content" '
+        f'<body data-interface-language="bilingual" data-default-language="zh" '
+        f'data-title-key="{title_key}"><a class="skip-link" href="#main-content" '
         'data-i18n="skip_main">跳到主要内容</a>'
         '<header class="topbar"><a class="brand" href="index.html"><span class="brand-mark">QS</span>'
         '<span class="brand-name">QueryStrategist</span></a>'
-        f'<span class="project-context" title="{html.escape(project_title, quote=True)}">{html.escape(project_title)}</span>'
+        f'<span class="project-context" title="{html.escape(project_title, quote=True)}">{_project_title_markup(project_title)}</span>'
         f'<nav class="primary-nav" aria-label="主要导航" data-i18n-aria-label="primary_nav">{_navigation(page_key, available_pages)}</nav>'
         f'<div class="header-tools">{language_button}{print_button}</div></header>'
-        '<noscript><div class="noscript">交互增强未启用，全部文档内容仍可正常阅读。</div></noscript>'
+        '<noscript><div class="noscript" data-i18n="noscript">交互增强未启用，全部文档内容仍可正常阅读。</div></noscript>'
         f"{main}{footer}<script>{JS}</script></body></html>\n"
     )
 
@@ -288,18 +316,18 @@ def index_page(available_pages, summary=None):
     content = (
         '<main id="main-content" class="home-main"><section class="home-hero">'
         '<div><p class="home-kicker" data-i18n="home_kicker">QUERYSTRATEGIST / 离线检索工作台</p>'
-        f"<h1>{html.escape(project_title)}</h1>"
+        f'<h1 data-home-project-title="true">{_project_title_markup(project_title)}</h1>'
         '<p class="home-lead" data-i18n="home_lead">从研究范围确认、检索式执行到候选文献筛选，所有内容均可离线浏览和复制。</p>'
         '<div class="meta-line">'
-        f'<span><span data-i18n="generated_date">生成日期</span> <b>{html.escape(str(generated_on))}</b></span>'
-        f'<span><span data-i18n="writing_type">写作类型</span> {_writing_type_markup(writing_type)}</span>'
-        f'<span><span data-i18n="time_span">时间范围</span> <b>{html.escape(str(time_span))}</b></span></div></div>'
+        f'<span data-summary-field="generated_on"><span data-i18n="generated_date">生成日期</span> <b>{html.escape(str(generated_on))}</b></span>'
+        f'<span data-summary-field="writing_type"><span data-i18n="writing_type">写作类型</span> {_writing_type_markup(writing_type)}</span>'
+        f'<span data-summary-field="time_span"><span data-i18n="time_span">时间范围</span> {_fallback_markup(time_span, "not_recorded", "未记录")}</span></div></div>'
         '<aside class="overview-panel" aria-label="结果摘要" data-i18n-aria-label="result_summary"><h2 data-i18n="result_summary">结果摘要</h2>'
-        f'<div class="overview-row"><span data-i18n="query_count">检索式</span><strong>{query_count} <span data-i18n="query_unit">条</span></strong></div>'
-        f'<div class="overview-row"><span data-i18n="candidate_count">候选文献</span><strong>{candidate_count} <span data-i18n="record_unit">篇</span></strong></div>'
-        f'<div class="overview-row"><span data-i18n="doi_verified">DOI 已验证</span><strong>{verified_count} <span data-i18n="record_unit">篇</span></strong></div>'
-        f'<div class="overview-row"><span data-i18n="open_access">开放获取</span><strong>{oa_count} <span data-i18n="record_unit">篇</span></strong></div>'
-        f'<div class="overview-row"><span data-i18n="qa_label">Query QA</span><strong>{_status_badge(qa_status)}</strong></div>'
+        f'<div class="overview-row" data-summary-field="query_count"><span data-i18n="query_count">检索式</span><strong>{query_count} <span data-i18n="query_unit">条</span></strong></div>'
+        f'<div class="overview-row" data-summary-field="candidate_count"><span data-i18n="candidate_count">候选文献</span><strong>{candidate_count} <span data-i18n="record_unit">篇</span></strong></div>'
+        f'<div class="overview-row" data-summary-field="verified_count"><span data-i18n="doi_verified">DOI 已验证</span><strong>{verified_count} <span data-i18n="record_unit">篇</span></strong></div>'
+        f'<div class="overview-row" data-summary-field="oa_count"><span data-i18n="open_access">开放获取</span><strong>{oa_count} <span data-i18n="record_unit">篇</span></strong></div>'
+        f'<div class="overview-row" data-summary-field="qa_status"><span data-i18n="qa_label">Query QA</span><strong>{_status_badge(qa_status)}</strong></div>'
         "</aside></section>"
         f'<nav class="pipeline" aria-label="策略包阅读流程" data-i18n-aria-label="pipeline_aria">{"".join(steps)}</nav>'
         '<p class="home-note" data-i18n="home_note">建议先确认研究范围，再使用推荐起步检索式。候选文献仅供筛选，正式引用前仍需核验题名、作者、年份、DOI 与全文内容。</p>'

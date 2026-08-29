@@ -1,6 +1,6 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：v1.6.3（以根目录 VERSION 为准）
+版本：v1.6.4（以根目录 VERSION 为准）
 
 ## 快速开始
 

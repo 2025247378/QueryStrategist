@@ -29,6 +29,24 @@ BILINGUAL_SIDECARS = {
     "scope_card": "scope_card.i18n.json",
     "usage_guide": "usage_guide.i18n.json",
 }
+INDEX_REQUIRED_I18N = (
+    "home_kicker",
+    "home_lead",
+    "generated_date",
+    "writing_type",
+    "time_span",
+    "result_summary",
+    "query_count",
+    "query_unit",
+    "candidate_count",
+    "record_unit",
+    "doi_verified",
+    "open_access",
+    "qa_label",
+    "home_note",
+    "offline_package",
+    "local_files",
+)
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 ALLOWED_CJK_PLATFORM_LABELS = {"万方", "万方数据", "中国知网"}
 
@@ -235,6 +253,7 @@ def _build_summary(normalized_files):
         normalized_heading.startswith("scope card")
         or normalized_heading in {"research scope", "研究范围"}
         or "范围卡" in heading_title
+        or "范围界定卡" in heading_title
     )
     project_title = "" if is_generic else heading_title
     if not project_title:
@@ -578,6 +597,26 @@ def _write_bom(path, text):
         stream.write(text)
 
 
+def _validate_index_contract(index_html):
+    """Keep the generated overview page bilingual and structurally inspectable."""
+    required = [
+        key
+        for key in INDEX_REQUIRED_I18N
+        if not re.search(rf'data-i18n="{re.escape(key)}"', index_html)
+    ]
+    if 'data-interface-language="bilingual"' not in index_html:
+        required.append("body bilingual interface marker")
+    if 'data-i18n-title="switch_english"' not in index_html:
+        required.append("language toggle translation marker")
+    if 'data-summary-field="query_count"' not in index_html:
+        required.append("query count summary marker")
+    if required:
+        raise ValueError(
+            "generated index.html failed the bilingual contract: "
+            + ", ".join(required)
+        )
+
+
 def process_directory(
     directory, markdown_names=DEFAULT_MARKDOWN, csv_names=DEFAULT_CSV
 ):
@@ -623,7 +662,9 @@ def process_directory(
 
     if available_pages:
         index_path = directory / "index.html"
-        _write_bom(index_path, WORKBENCH.index_page(available_pages, summary))
+        index_html = WORKBENCH.index_page(available_pages, summary)
+        _validate_index_contract(index_html)
+        _write_bom(index_path, index_html)
         processed.append(index_path)
     for name in csv_names:
         path = directory / name

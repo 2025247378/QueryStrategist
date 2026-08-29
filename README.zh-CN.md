@@ -4,7 +4,7 @@
 
 > QueryStrategist（文献检索策略师）是一款面向科研人员的 LLM 驱动交互式文献检索 Skill，支持学术检索、学术信息检索和科研工作流辅助。你只需提供研究方向，它会运用 LLM 语义理解自动识别研究对象、技术方法、任务指标和范围边界，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
 >
-> **版本**：v1.6.3（2026-08-24）
+> **版本**：v1.6.4（2026-08-30）
 
 ![QueryStrategist 检索策略工作台总览](img/product-overview.png)
 

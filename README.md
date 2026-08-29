@@ -4,11 +4,11 @@
 
 > [中文说明](README.zh-CN.md)
 
-> **Version**: v1.6.3 (2026-08-24)
+> **Version**: v1.6.4 (2026-08-30)
 
 QueryStrategist is an interactive **AI agent skill for literature search, scholarly information retrieval, and research workflow support**. It uses LLM semantic understanding to structure a research idea, generate platform-specific queries, and optionally collect candidate metadata through OpenAlex and Crossref.
 
-![QueryStrategist search strategy workbench](img/product-overview.png)
+![QueryStrategist search strategy workbench](img/en/product-overview.png)
 
 *The generated workbench brings the scope card, six-database queries, candidate literature, and usage guide together under a single `index.html` entry point.*
 
@@ -34,7 +34,7 @@ The root `SKILL.md` orchestrates three sequential steps:
 
 The final output is a **search strategy pack** consisting of a scope card, a multi-platform query pack, a candidate literature list, and a usage guide.
 
-![QueryStrategist workflow](img/workflow.png)
+![QueryStrategist workflow](img/en/workflow.png)
 
 *G1 and G2 preserve researcher control. G0 is an internal validation step. Search B requests network consent before accessing OpenAlex and Crossref.*
 
@@ -82,7 +82,7 @@ Each database receives layered query variants:
 
 Use the sequence `A0 → A1 → B`. Starting with the strictest query can hide useful terminology and make zero-result problems harder to diagnose. For IEEE Xplore, validate the broad A0 query first, then add conditions gradually.
 
-![Six-database query pack](img/query-pack.png)
+![Six-database query pack](img/en/query-pack.png)
 
 ## Optional Candidate-Literature Harvesting
 
@@ -94,7 +94,7 @@ The default process uses two to three controlled OpenAlex queries. Results are m
 
 The candidate list includes title, authors, venue, year, DOI, source, verification status, and open-access status.
 
-![Candidate literature list](img/candidate-list.png)
+![Candidate literature list](img/en/candidate-list.png)
 
 The harvested metadata is a **candidate reference list, not a trusted corpus**. Researchers must verify the actual paper, download full text themselves, and decide whether a paper should be included.
 
