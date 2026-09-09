@@ -4,13 +4,17 @@
 
 > [中文说明](README.zh-CN.md)
 
-> **Version**: v1.6.4 (2026-08-30)
+> **Version**: v1.6.5 (2026-09-09)
 
 QueryStrategist is an interactive **AI agent skill for literature search, scholarly information retrieval, and research workflow support**. It uses LLM semantic understanding to structure a research idea, generate platform-specific queries, and optionally collect candidate metadata through OpenAlex and Crossref.
 
 ![QueryStrategist search strategy workbench](img/en/product-overview.png)
 
 *The generated workbench brings the scope card, six-database queries, candidate literature, and usage guide together under a single `index.html` entry point.*
+
+![QueryStrategist promotional workflow](img/querystrategist-pipeline.png)
+
+*From one research direction to six-database queries, candidate verification, and a reusable search strategy workbench.*
 
 ## What Problem Does It Solve?
 

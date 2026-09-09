@@ -4,7 +4,7 @@ description: "CNKI检索式构建器 | 将中文三级关键词转化为知网�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.6.4
+  version: v1.6.5
   keywords: [CNKI, search query, Chinese literature, QueryStrategist]
   triggers: [CNKI, 知网, 中文检索式, 中文文献]
 ---
