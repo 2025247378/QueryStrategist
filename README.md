@@ -4,7 +4,7 @@
 
 > [中文说明](README.zh-CN.md)
 
-> **Version**: v1.6.5 (2026-09-09)
+> **Version**: v1.6.6 (2026-10-05)
 
 QueryStrategist is an interactive **AI agent skill for literature search, scholarly information retrieval, and research workflow support**. It uses LLM semantic understanding to structure a research idea, generate platform-specific queries, and optionally collect candidate metadata through OpenAlex and Crossref.
 

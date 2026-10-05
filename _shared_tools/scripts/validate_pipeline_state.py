@@ -22,6 +22,13 @@ META_FIELDS = (
     "writing_type",
     "target_language",
 )
+PIPELINE_STATE_FIELDS = (
+    "schema_version",
+    "project_id",
+    "current_step",
+    "step_status",
+    "updated_at",
+)
 
 SUPPORTED_DATABASES = {
     "Web of Science",
@@ -53,6 +60,33 @@ def validate_project(project_dir):
 
     config = _load(project_dir / "pipeline_state" / "config.json", errors)
     meta = _load(project_dir / "project_meta.json", errors)
+    pipeline_state = _load(project_dir / "pipeline_state.json", errors) \
+        if (project_dir / "pipeline_state.json").exists() else None
+
+    if isinstance(pipeline_state, dict):
+        for field in PIPELINE_STATE_FIELDS:
+            if field not in pipeline_state:
+                errors.append(f"pipeline_state missing field: {field}")
+        if pipeline_state.get("schema_version") != 1:
+            errors.append("pipeline_state schema_version must be 1")
+        if not isinstance(pipeline_state.get("project_id"), str) or not pipeline_state.get("project_id").strip():
+            errors.append("pipeline_state project_id must be a non-empty string")
+        if not isinstance(pipeline_state.get("current_step"), str) or not pipeline_state.get("current_step").strip():
+            errors.append("pipeline_state current_step must be a non-empty string")
+        step_status = pipeline_state.get("step_status")
+        if not isinstance(step_status, dict):
+            errors.append("pipeline_state step_status must be an object")
+        for ref_name in ("scope_card_ref", "query_pack_ref", "candidate_list_ref", "usage_guide_ref"):
+            if ref_name in pipeline_state and pipeline_state[ref_name] is not None \
+                    and not isinstance(pipeline_state[ref_name], str):
+                errors.append(f"pipeline_state {ref_name} must be a string or null")
+        for count_name in ("candidate_count", "verified_count"):
+            if count_name in pipeline_state and (
+                not isinstance(pipeline_state[count_name], int) or pipeline_state[count_name] < 0
+            ):
+                errors.append(f"pipeline_state {count_name} must be a non-negative integer")
+        if "qa_status" in pipeline_state and pipeline_state["qa_status"] not in {"PASS", "WARNING", "FAIL", None}:
+            errors.append("pipeline_state qa_status must be PASS, WARNING, FAIL, or null")
 
     if isinstance(config, dict):
         for field in CONFIG_FIELDS:

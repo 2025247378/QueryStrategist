@@ -4,7 +4,7 @@ description: "文献自动收割器（两源版）| OpenAlex 无密钥收割主�
 license: MIT
 metadata:
   skill-author: PanY
-  version: v1.6.5
+  version: v1.6.6
   keywords: [literature harvesting, OpenAlex, Crossref, API, QueryStrategist]
   triggers: [文献收割, harvester, API收割, 元数据]
 ---
@@ -43,6 +43,10 @@ python scripts/harvest.py --query "..." --dry-run                    # 不联网
 python scripts/harvest.py --network-consent --gradient-file search_b_queries.json --per-query 25
 python scripts/harvest.py --network-consent --query "..." --mailto you@example.com  # 仅在用户另行同意提交邮箱后使用
 
+# 可选：长任务断点、失败重试与诊断日志
+python scripts/harvest.py --network-consent --gradient-file search_b_queries.json \
+  --checkpoint harvest_checkpoint.json --retry-unverified --log-level INFO
+
 # 方式二：手动预装（可选）
 pip install -r scripts/requirements.txt         # requests
 ```
@@ -56,7 +60,7 @@ pip install -r scripts/requirements.txt         # requests
   "openalex": [...],        # 原始收割记录（每条含 verification、is_oa、oa_status 字段）
   "verified": [...],        # ✅ Crossref 验证通过（title 相似度≥0.8 且年份差≤1）→ 可信候选
   "unverified": [...],      # ⚠️ 无 DOI / 验证瞬时失败 → 保留供人工参考
-  "dropped": [...],         # ❌ 验证不通过（title_mismatch / year_mismatch / doi_not_found）→ 疑似幻觉/错配，剔除
+  "dropped": [...],         # 验证不通过（title_mismatch / year_mismatch / crossref_404）→ 疑似幻觉/错配，剔除
   "statistics": {"harvested_raw": N, "harvested_deduplicated": N, "duplicates_removed": N, "verified": N, "unverified": N, "dropped": N, "verify_enabled": true}
 }
 ```
@@ -65,7 +69,10 @@ pip install -r scripts/requirements.txt         # requests
 **验证逻辑（去幻觉核心）**：
 - OpenAlex 每条记录自带 DOI（完整 URL 形式），提取裸 DOI 后回查 Crossref `GET /works/{doi}`；
 - 比对 Crossref 返回的 title（归一化后 SequenceMatcher 相似度 ≥0.8）与 year（|Δ|≤1，容忍出版年先后偏差）；
-- 通过 → `verified`；title 或 year 明显不符 → `dropped`（附 `reason`）；无 DOI → `unverified`；单条验证瞬时网络错误 → 标记 `verify_error` 保留不武断判死；DOI 在 Crossref 404 → `dropped`（`doi_not_found`）。
+- 通过 → `verified`；title 或 year 明显不符 → `dropped`（附 `reason`）；无 DOI → `unverified`；单条验证瞬时网络错误 → 标记 `verify_error` 保留不武断判死。
+- `verification_detail.reason` 使用稳定分类：`no_doi`、`crossref_404`、`title_mismatch`、`year_mismatch`、`api_timeout`、`api_error`、`request_budget_exceeded`；可重试错误另附 `retryable=true`、HTTP 状态和尝试次数。
+- `verification_detail.match_quality` 仅为标题匹配提示：`high`（相似度 ≥0.90）或 `borderline`（0.80–0.90），不等同于学术可信度等级。
+- 指定 `--checkpoint` 后按 `--checkpoint-every` 条记录原子保存验证进度；输入候选改变时拒绝恢复，使用 `--restart` 从头开始。`--retry-unverified` 只重试 API 瞬时错误，不会把无 DOI 条目自动升级为已验证。
 
 
 # Literature Harvester

@@ -35,11 +35,13 @@ Search B 通道：OpenAlex 收割 + Crossref 逐条验证（去幻觉）。
 import argparse
 import hashlib
 import json
+import logging
 import os
 import re
 import subprocess
 import sys
 import time
+import uuid
 from urllib.parse import urlencode
 from difflib import SequenceMatcher
 
@@ -100,6 +102,119 @@ _load_third_party()
 
 
 UA_BASE = "QueryStrategist-Harvester/2.2"
+
+LOGGER = logging.getLogger("querystrategist.harvest")
+CHECKPOINT_SCHEMA_VERSION = 1
+DEFAULT_CHECKPOINT_EVERY = 5
+
+
+def _configure_logging(level="WARNING", log_format="text", log_file=None):
+    """Configure optional diagnostics without mixing them into result JSON."""
+    numeric = getattr(logging, str(level or "WARNING").upper(), logging.WARNING)
+    handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler(sys.stderr)
+    if log_format == "json":
+        class JsonFormatter(logging.Formatter):
+            def format(self, record):
+                payload = getattr(record, "payload", {})
+                payload = {"timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
+                           "module": "literature_harvester", "level": record.levelname, **payload}
+                return json.dumps(payload, ensure_ascii=False)
+        handler.setFormatter(JsonFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    LOGGER.handlers.clear()
+    LOGGER.addHandler(handler)
+    LOGGER.setLevel(numeric)
+    LOGGER.propagate = False
+
+
+def _log(level, operation, **fields):
+    LOGGER.log(getattr(logging, str(level).upper(), logging.INFO),
+               operation, extra={"payload": {"operation": operation, **fields}})
+
+
+def _error_http_status(error):
+    match = re.search(r"HTTP\s+(\d{3})", str(error), re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _classify_verification_error(error):
+    """Return a stable reason used by retry and UI layers."""
+    status = _error_http_status(error)
+    text = str(error).casefold()
+    if status == 404:
+        return "crossref_404", status, False
+    if isinstance(error, RequestBudgetExceeded) or "预算" in text or "budget" in text:
+        return "request_budget_exceeded", status, True
+    if "timeout" in text or "timed out" in text or "超时" in text:
+        return "api_timeout", status, True
+    return "api_error", status, True
+
+
+def _paper_checkpoint_key(paper):
+    doi = _extract_doi(paper.get("doi"))
+    if doi:
+        return "doi:" + doi.casefold()
+    raw = json.dumps({"title": paper.get("title"), "year": paper.get("year")},
+                     ensure_ascii=False, sort_keys=True)
+    return "paper:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _papers_fingerprint(papers):
+    payload = [_paper_checkpoint_key(paper) for paper in papers]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _load_checkpoint(path, fingerprint, restart=False):
+    if not path:
+        return {"completed": {}}
+    path = os.fspath(path)
+    if restart and os.path.exists(path):
+        os.remove(path)
+    if not os.path.isfile(path):
+        return {"completed": {}}
+    try:
+        with open(path, encoding="utf-8") as stream:
+            checkpoint = json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"无法读取 checkpoint：{path}（{exc}）") from exc
+    if checkpoint.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
+        raise ValueError("checkpoint schema_version 不兼容，请使用 --restart")
+    if checkpoint.get("input_fingerprint") != fingerprint:
+        raise ValueError("checkpoint 与当前候选输入不一致，请使用 --restart")
+    return checkpoint
+
+
+def _write_checkpoint(path, fingerprint, completed, processed_count, budget_summary=None, final=False):
+    if not path:
+        return
+    path = os.fspath(path)
+    parent = os.path.dirname(os.path.abspath(path))
+    os.makedirs(parent, exist_ok=True)
+    payload = {
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "input_fingerprint": fingerprint,
+        "processed_count": processed_count,
+        "completed": completed,
+        "request_budget": budget_summary or {},
+        "completed_run": bool(final),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    temporary = path + f".{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    with open(temporary, "w", encoding="utf-8") as stream:
+        json.dump(payload, stream, ensure_ascii=False, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+    last_error = None
+    for attempt in range(3):
+        try:
+            os.replace(temporary, path)
+            return
+        except PermissionError as error:
+            last_error = error
+            if attempt < 2:
+                time.sleep(0.05 * (attempt + 1))
+    raise last_error
 
 
 class RequestBudgetExceeded(RuntimeError):
@@ -394,7 +509,9 @@ def harvest_gradient(queries, per_query=25, verify=True, mailto=None,
                      min_year=None, max_year=None, cache_dir=None,
                      budgets=None, species_terms=None, tech_terms=None,
                      task_terms=None, exclude_terms=None,
-                     network_consent=False):
+                     network_consent=False, checkpoint_path=None,
+                     checkpoint_every=DEFAULT_CHECKPOINT_EVERY,
+                     restart=False, retry_unverified=False):
     """Run a bounded 2-3 query OpenAlex gradient and verify after deduplication.
 
     ``queries`` contains dictionaries with ``name`` and ``query`` plus optional
@@ -450,7 +567,11 @@ def harvest_gradient(queries, per_query=25, verify=True, mailto=None,
             except Exception as exc:
                 query_stats.append({"name": name, "harvested": 0, "error": str(exc)})
         unique = deduplicate_papers(raw)
-        kept, dropped = verify_openalex_results(unique, mailto=mailto, skip_verify=not verify)
+        kept, dropped = verify_openalex_results(
+            unique, mailto=mailto, skip_verify=not verify,
+            checkpoint_path=checkpoint_path, checkpoint_every=checkpoint_every,
+            restart=restart, retry_unverified=retry_unverified,
+        )
         result = {
             "queries": queries,
             "openalex": unique,
@@ -545,16 +666,22 @@ def verify_by_doi(doi, expected_title, expected_year, mailto=None):
             "crossref_year": cr_year,
             "similarity": round(sim, 3),
             "reason": "match",
+            "match_quality": "high" if sim >= 0.9 else "borderline",
+            "retryable": False,
         }
     return False, {
         "crossref_title": cr_title,
         "crossref_year": cr_year,
         "similarity": round(sim, 3),
         "reason": "title_mismatch" if sim < 0.8 else "year_mismatch",
+        "match_quality": "failed",
+        "retryable": False,
     }
 
 
-def verify_openalex_results(papers, mailto=None, skip_verify=False):
+def verify_openalex_results(papers, mailto=None, skip_verify=False,
+                            checkpoint_path=None, checkpoint_every=DEFAULT_CHECKPOINT_EVERY,
+                            restart=False, retry_unverified=False):
     """批量验证 OpenAlex 收割结果（去幻觉核心）。
 
     逐条处理:
@@ -562,6 +689,9 @@ def verify_openalex_results(papers, mailto=None, skip_verify=False):
       - 有 DOI + 验证通过 → verified
       - 有 DOI + 验证失败 → dropped（附 reason: title_mismatch / year_mismatch）
       - 单条验证瞬时异常（网络/429/404） → 不武断判死，标记 verify_error 保留供人工参考
+
+    ``checkpoint_path`` 非空时按 ``checkpoint_every`` 条原子写入断点。
+    当前输入哈希变化时拒绝恢复，避免跨项目复用旧结果。
 
     Returns: (kept, dropped)
         kept    中每条含 verification 字段（verified / unverified / verify_error）
@@ -572,43 +702,87 @@ def verify_openalex_results(papers, mailto=None, skip_verify=False):
             p["verification"] = "skipped"
         return list(papers), []
     kept, dropped = [], []
+    fingerprint = _papers_fingerprint(papers)
+    checkpoint = _load_checkpoint(checkpoint_path, fingerprint, restart=restart)
+    completed = checkpoint.get("completed", {})
+    processed_count = 0
+    checkpoint_every = max(int(checkpoint_every or DEFAULT_CHECKPOINT_EVERY), 1)
     for p in papers:
+        key = _paper_checkpoint_key(p)
+        previous = completed.get(key)
+        previous_detail = (previous or {}).get("verification_detail") or {}
+        previous_reason = previous_detail.get("reason")
+        should_retry = retry_unverified and previous_reason in {
+            "api_timeout", "api_error", "request_budget_exceeded"
+        }
+        if previous and not should_retry:
+            p.update(previous.get("paper") or {})
+            if previous.get("verification") == "dropped":
+                dropped.append(p)
+            else:
+                kept.append(p)
+            processed_count += 1
+            continue
         doi = _extract_doi(p.get("doi"))
         if not doi:
             p["verification"] = "unverified"
             p["verification_note"] = "无 DOI，无法用 Crossref 交叉验证"
+            p["verification_detail"] = {
+                "similarity": None, "reason": "no_doi", "retryable": False,
+            }
             kept.append(p)
-            continue
-        try:
-            ok, detail = verify_by_doi(doi, p.get("title"), p.get("year"), mailto=mailto)
-            if ok:
-                p["verification"] = "verified"
-                p["verification_detail"] = detail
-                kept.append(p)
-            else:
-                p["verification"] = "dropped"
-                p["verification_detail"] = detail
-                dropped.append(p)
-        except Exception as e:
-            # 404 = DOI 在 Crossref 不存在 → 判定 dropped；其余瞬时错误保留
-            if "HTTP 404" in str(e) or "404" in str(e):
-                p["verification"] = "dropped"
-                p["verification_detail"] = {
+        else:
+            try:
+                ok, detail = verify_by_doi(doi, p.get("title"), p.get("year"), mailto=mailto)
+                if ok:
+                    p["verification"] = "verified"
+                    p["verification_detail"] = detail
+                    kept.append(p)
+                else:
+                    p["verification"] = "dropped"
+                    p["verification_detail"] = detail
+                    dropped.append(p)
+            except Exception as error:
+                reason, status, retryable = _classify_verification_error(error)
+                detail = {
                     "crossref_title": None, "crossref_year": None,
-                    "similarity": 0.0, "reason": "doi_not_found",
+                    "similarity": None, "reason": reason,
+                    "retryable": retryable, "http_status": status,
+                    "attempts": 1,
                 }
-                dropped.append(p)
-            else:
-                p["verification"] = "verify_error"
-                p["verification_note"] = str(e)
-                kept.append(p)
+                if reason == "crossref_404":
+                    p["verification"] = "dropped"
+                    p["verification_detail"] = detail
+                    dropped.append(p)
+                else:
+                    p["verification"] = "verify_error"
+                    p["verification_note"] = str(error)
+                    p["verification_detail"] = detail
+                    kept.append(p)
+        completed[key] = {
+            "paper": p,
+            "verification": p.get("verification"),
+            "verification_detail": p.get("verification_detail", {}),
+        }
+        processed_count += 1
+        _log("INFO", "crossref_verification", doi=doi, status=p.get("verification"),
+             reason=(p.get("verification_detail") or {}).get("reason"),
+             similarity=(p.get("verification_detail") or {}).get("similarity"))
+        if checkpoint_path and processed_count % checkpoint_every == 0:
+            _write_checkpoint(checkpoint_path, fingerprint, completed, processed_count,
+                              _ACTIVE_BUDGET.summary() if _ACTIVE_BUDGET else {}, final=False)
+    if checkpoint_path:
+        _write_checkpoint(checkpoint_path, fingerprint, completed, processed_count,
+                          _ACTIVE_BUDGET.summary() if _ACTIVE_BUDGET else {}, final=True)
     return kept, dropped
 
 
 def harvest(query, per_platform=20, verify=True, mailto=None,
             min_year=None, max_year=None, cache_dir=None, budgets=None,
             species_terms=None, tech_terms=None, task_terms=None,
-            exclude_terms=None, network_consent=False):
+            exclude_terms=None, network_consent=False, checkpoint_path=None,
+            checkpoint_every=DEFAULT_CHECKPOINT_EVERY, restart=False,
+            retry_unverified=False):
     """OpenAlex 收割 + Crossref 逐条验证（Search B 精简两源版）。
 
     Args:
@@ -653,7 +827,11 @@ def harvest(query, per_platform=20, verify=True, mailto=None,
         else:
             papers = harvest_openalex(query, per_platform, min_year=min_year, max_year=max_year)
         result["openalex"] = papers
-        kept, dropped = verify_openalex_results(papers, mailto=mailto, skip_verify=not verify)
+        kept, dropped = verify_openalex_results(
+            papers, mailto=mailto, skip_verify=not verify,
+            checkpoint_path=checkpoint_path, checkpoint_every=checkpoint_every,
+            restart=restart, retry_unverified=retry_unverified,
+        )
         result["dropped"] = dropped
         result["verified"] = [p for p in kept if p.get("verification") == "verified"]
         result["unverified"] = [p for p in kept if p.get("verification") != "verified"]
@@ -719,6 +897,20 @@ def main():
     ap.add_argument("--no-cache", action="store_true", help="关闭响应缓存")
     ap.add_argument("--openalex-budget", type=int, default=None, help="本次 OpenAlex 请求预算")
     ap.add_argument("--crossref-budget", type=int, default=None, help="本次 Crossref 请求预算")
+    ap.add_argument("--checkpoint", dest="checkpoint_path", default=None,
+                    help="验证断点 JSON 路径；不指定则不写入断点")
+    ap.add_argument("--checkpoint-every", type=int, default=DEFAULT_CHECKPOINT_EVERY,
+                    help=f"每处理多少条写入一次断点（默认 {DEFAULT_CHECKPOINT_EVERY}）")
+    ap.add_argument("--restart", action="store_true",
+                    help="忽略已有 checkpoint，从头验证")
+    ap.add_argument("--retry-unverified", action="store_true",
+                    help="仅重试之前因超时、API 错误或预算耗尽而未验证的条目")
+    ap.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+                    default="WARNING", help="诊断日志级别；默认不输出逐条 INFO 日志")
+    ap.add_argument("--log-format", choices=("text", "json"), default="text",
+                    help="诊断日志格式；写入 stderr 或 --log-file")
+    ap.add_argument("--log-file", default=None,
+                    help="诊断日志文件路径；未指定时写入 stderr")
     ap.add_argument("--network-consent", action="store_true",
                     help="确认用户已授权访问 api.openalex.org 和 api.crossref.org")
     ap.add_argument("--dry-run", action="store_true", help="只检查参数与预算，不发起网络请求")
@@ -727,6 +919,9 @@ def main():
     ap.add_argument("--check-deps", action="store_true", default=False,
                     help="仅检查/安装依赖后退出（首次使用前验证环境是否就绪，不发起任何检索）")
     args = ap.parse_args()
+    _configure_logging(args.log_level, args.log_format, args.log_file)
+    if args.checkpoint_every < 1:
+        ap.error("--checkpoint-every 必须为正整数")
 
     tier_values = (args.species, args.technology, args.task)
     tier_mode = any(value is not None for value in tier_values)
@@ -792,6 +987,10 @@ def main():
             "min_year": args.min_year,
             "max_year": args.max_year,
             "verify": args.verify,
+            "checkpoint": args.checkpoint_path,
+            "checkpoint_every": args.checkpoint_every,
+            "retry_unverified": args.retry_unverified,
+            "log_level": args.log_level,
             "network_consent": args.network_consent,
             "budgets": {
                 "openalex": args.openalex_budget or int(os.environ.get("HARVEST_OPENALEX_BUDGET", "120")),
@@ -832,6 +1031,10 @@ def main():
             budgets={"openalex": args.openalex_budget, "crossref": args.crossref_budget},
             exclude_terms=args.exclude,
             network_consent=args.network_consent,
+            checkpoint_path=args.checkpoint_path,
+            checkpoint_every=args.checkpoint_every,
+            restart=args.restart,
+            retry_unverified=args.retry_unverified,
         )
     elif args.query or tier_mode:
         result = harvest(trace_query, args.per_platform,
@@ -844,7 +1047,11 @@ def main():
                           tech_terms=args.technology,
                           task_terms=args.task,
                           exclude_terms=args.exclude,
-                          network_consent=args.network_consent)
+                          network_consent=args.network_consent,
+                          checkpoint_path=args.checkpoint_path,
+                          checkpoint_every=args.checkpoint_every,
+                          restart=args.restart,
+                          retry_unverified=args.retry_unverified)
     else:
         print("[demo] 未提供 --query，使用示例检索词:\n")
         result = _demo(network_consent=args.network_consent)

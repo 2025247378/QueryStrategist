@@ -1,6 +1,6 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：v1.6.5（以根目录 VERSION 为准）
+版本：v1.6.6（以根目录 VERSION 为准）
 
 ## 快速开始
 
@@ -53,7 +53,7 @@ QueryStrategist/
 ## 外部 API（需外网，建议直连）
 
 - 运行收割脚本前如设置了代理环境变量，建议 `unset HTTP_PROXY HTTPS_PROXY` 走直连，避免代理不可用时导致连接失败。
-- 收割脚本已内置 **API 配额守卫**：OpenAlex 默认 120 次、Crossref 默认 60 次请求预算；连续 3 次 429 熔断，Retry-After 最多等待 20 秒，按请求参数缓存响应，支持 `--dry-run`、`--min-year`、`--max-year`。预算可通过 `--openalex-budget` / `--crossref-budget` 或环境变量覆盖。
+- 收割脚本已内置 **API 配额守卫**：OpenAlex 默认 120 次、Crossref 默认 60 次请求预算；连续 3 次 429 熔断，Retry-After 最多等待 20 秒，按请求参数缓存响应，支持 `--dry-run`、`--min-year`、`--max-year`。预算可通过 `--openalex-budget` / `--crossref-budget` 或环境变量覆盖。长任务可显式启用 `--checkpoint` 断点、`--retry-unverified` 重试和 `--log-level` 诊断日志；默认不产生额外运行文件。
 
 ## 已知边界
 
