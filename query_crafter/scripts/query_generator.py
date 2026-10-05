@@ -12,16 +12,16 @@ query_generator.py — QueryStrategist · 多平台检索式生成器
     python query_generator.py --scope scope.json --platforms wos
 
     # 直接从命令行给关键词
-    python query_generator.py --t1 "organ-on-a-chip" --t2 "microfluidics" --ex "diagnosis"
+    python query_generator.py --t1 "lung nodule" --t2 "deep learning" --ex "non-medical imaging"
 
 scope.json 结构:
     {
       "keyword_tiers": {
-        "tier1_species_object": ["organ-on-a-chip", "microfluidic organoid"],
-        "tier2_technology_method": ["microfluidics", "3D bioprinting"],
-        "tier3_application_task": ["drug toxicity screening"]
+        "tier1_species_object": ["lung nodule", "pulmonary nodule"],
+        "tier2_technology_method": ["deep learning", "convolutional neural network"],
+        "tier3_application_task": ["detection", "segmentation"]
       },
-      "explicit_exclusions": ["disease diagnosis", "in vivo animal"]
+      "explicit_exclusions": ["non-medical imaging", "animal experiment"]
     }
 
 输出: JSON {platform: query_string_or_list}；Google Scholar 在长词表下返回互补查询列表。
@@ -448,8 +448,8 @@ def _ieee_task_recall_terms(terms, explicit_anchors=None):
 def _ieee_object_recall_terms(terms, explicit_anchors=None):
     """Add repeated head nouns while avoiding isolated modifiers.
 
-    For example, ``aquaculture fish``, ``farmed fish`` and ``fish fillet``
-    contribute ``fish``; isolated words such as ``farmed`` and ``cultured`` do
+For example, ``lung nodule``, ``pulmonary nodule`` and ``solitary nodule``
+contribute ``nodule``; isolated words such as ``lung`` and ``pulmonary`` do
     not become standalone search terms. Callers can supply explicit anchors for
     domain words that occur only once.
     """
@@ -1080,11 +1080,11 @@ def generate_variants(scope, platforms=None, warnings=None):
 def _demo_scope():
     return {
         "keyword_tiers": {
-            "tier1_species_object": ["organ-on-a-chip", "microfluidic organoid"],
-            "tier2_technology_method": ["microfluidics", "3D bioprinting"],
-            "tier3_application_task": ["drug toxicity screening"],
+            "tier1_species_object": ["lung nodule", "pulmonary nodule"],
+            "tier2_technology_method": ["deep learning", "convolutional neural network"],
+            "tier3_application_task": ["detection", "segmentation"],
         },
-        "explicit_exclusions": ["disease diagnosis", "in vivo animal"],
+        "explicit_exclusions": ["non-medical imaging", "animal experiment"],
     }
 
 

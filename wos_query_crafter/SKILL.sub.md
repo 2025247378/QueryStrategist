@@ -3,8 +3,8 @@ name: wos_query_crafter
 description: "WoS检索式构建器 | 将三级关键词转化为 Web of Science 高级检索语法，生成 A0 对象+技术召回基线、A1 三层主题检索和 B 标题/NEAR 精准检索；年份使用结果页筛选器。QueryStrategist Search A 子模块。Use for Web of Science advanced search query building. Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [Web of Science, search query, bibliographic, QueryStrategist]
   triggers: [WoS, web of science, 检索式]
 ---
@@ -203,3 +203,4 @@ TS=("autonomous vehicle" OR "self-driving car") AND TS=(("computer vision" OR "d
 2. 结果过多时，用**检索式 B** 缩小范围，或限定 `SO=` 核心期刊。
 3. 使用 `Analyze Results` 发现核心期刊和团队。
 4. 找到关键论文后，用 `Cited References` 和 `Citation Network` 扩展文献。
+

@@ -3,8 +3,8 @@ name: wanfang_query_crafter
 description: "Wanfang检索式构建器 | 将中文三级关键词转化为万方高级/专业检索配置，生成 A0 对象+技术召回式、A1 三层主题式和 B 精确匹配式，支持字段选择、AND/OR/NOT 与结果页筛选。QueryStrategist 中文补充子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [Wanfang, search query, Chinese literature, QueryStrategist]
   triggers: [万方, 检索式, 中文文献]
 ---
@@ -116,3 +116,4 @@ Set publication years with the official `发表时间` controls.
 - Review every condition for Chinese full-width punctuation. Logic relations and parentheses in the retrieval expression should follow Wanfang's displayed format.
 - **Current official interface shows `AND`/`OR`/`NOT`** with precedence `( ) > NOT > AND > OR`. Do not emit CNKI-style `* + -` unless a future official Wanfang page explicitly documents it.
 - **万方高级检索每行之间的关系仅 与(AND) / 或(OR) / 非(NOT) 三种**：最后一行之后没有逻辑关系符（切勿用 "—" 表示"结束"）。"非"用于把整行作为排除条件放在末行；中间行之间只能用 与/或 连接。
+

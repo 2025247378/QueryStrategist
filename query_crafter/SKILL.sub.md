@@ -3,8 +3,8 @@ name: query_crafter
 description: "检索式构建总控 | 自动调用全部6个平台子skill（WoS/Scopus/IEEE/CNKI/Wanfang/Google Scholar），根据配置智能激活/跳过，并行产出多平台检索式合集。QueryStrategist Search Strategist子模块 Use this skill for multi-platform search-query orchestration tasks within the QueryStrategist literature-search workflow. Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [search query, database, orchestration, QueryStrategist]
   triggers: [检索式, query crafter, 检索式总控, 多平台检索]
 ---
@@ -25,7 +25,7 @@ version: v1.6.6
 # 从 scope.json 生成全部平台检索式（默认 broad=True 宽口径）
 python scripts/query_generator.py --scope scope.json --all
 # 或从命令行直接给词
-python scripts/query_generator.py --t1 "organ-on-a-chip" --t2 "microfluidics" --ex "diagnosis"
+python scripts/query_generator.py --t1 "lung nodule" --t2 "deep learning" --ex "non-medical imaging"
 # 分层变体：默认生成 A0 召回基线、A1 主题检索和 B 平台专属精准式
 python scripts/query_generator.py --scope scope.json --all
 # 生成平台专属分层检索式；IEEE 按每个 search clause 的 25-term 上限校验并生成 A/B/C/D/E
@@ -211,3 +211,4 @@ Present the compiled queries, grouped by database. For each database, include:
 - All queries are starting points. Users should iterate based on the results obtained and adjust keywords as needed.
 - If a sub-skill fails or returns an error, report the failure for that specific database and continue with the remaining databases.
 - The output of this skill is passed to the user as part of the Search Strategist's Literature Collection Report. The user will manually execute these queries and download the resulting PDFs.
+

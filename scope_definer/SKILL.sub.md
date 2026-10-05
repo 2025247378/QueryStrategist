@@ -3,8 +3,8 @@ name: scope_definer
 description: "QueryStrategist 范围界定模块 | 从研究方向自动构建对象、技术、任务、中文词表和排除词分级，默认采用安全的宽范围策略。主题明确时不逐项提问，只展示一次范围卡并在 G1 让用户选择直接生成或调整；仅当对象或核心技术无法识别时，允许一次批量澄清。"
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [research scope, keyword tiers, exclusions, fast confirmation, QueryStrategist]
   triggers: [研究范围, 范围界定, 关键词体系, scope]
 ---
@@ -128,3 +128,4 @@ version: v1.6.6
 ```
 
 将文档保存在活动项目目录。G1 未确认前不得启动 Search A 或 Search B。
+

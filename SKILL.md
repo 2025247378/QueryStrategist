@@ -3,8 +3,8 @@ name: querystrategist
 description: "QueryStrategist（文献检索策略师）是一款面向科研人员的交互式文献检索 Skill。你只需提供研究方向，它会运用 LLM 语义理解自动识别研究对象、技术方法、任务指标和范围边界，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。"
 license: MIT
 metadata:
-  skill-author: PanY
-  version: v1.6.6
+  skill-author: QueryStrategist Team
+  version: v1.6.7
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -30,13 +30,13 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 已经有明确研究方向时，发送：
 
 ```text
-开始文献检索，我的研究方向是：水产养殖鱼类光谱成像品质鉴定与规格分级
+开始文献检索，我的研究方向是：基于深度学习的医学影像肺结节检测与分割
 ```
 
 只需要六库检索式、不需要 API 收割时，发送：
 
 ```text
-只启动 Search A，为以下方向生成六库检索式：水产养殖鱼类光谱成像品质鉴定与规格分级
+只启动 Search A，为以下方向生成六库检索式：自动驾驶场景中的多模态感知与目标检测
 ```
 
 ## 选择使用方式
@@ -96,14 +96,14 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ## 使用示例
 
-**研究方向**：水产养殖鱼类光谱成像品质鉴定与规格分级
+**研究方向**：基于深度学习的医学影像肺结节检测与分割
 
 系统会协助明确：
 
-- **对象**：养殖鱼类、fish、farmed fish、aquaculture fish。
-- **技术**：高光谱成像、多光谱成像、光谱成像。
-- **任务**：新鲜度、脂肪、水分、蛋白、纹理和规格分级。
-- **排除**：虾蟹贝类、水质监测、病原检测和传统人工感官评价。
+- **对象**：医学影像、肺部 CT、lung CT、medical imaging。
+- **技术**：深度学习、卷积神经网络、目标检测、图像分割。
+- **任务**：肺结节检测、病灶定位、分割、辅助诊断和模型评估。
+- **排除**：非医学影像任务、动物实验和与肺结节无关的临床主题。
 
 最终生成六个平台的 A0、A1 和 B 检索式，各平台的粘贴位置与筛选建议，经 DOI 核验的候选文献清单，以及可离线浏览、筛选和复制的 HTML 工作台。
 
@@ -163,7 +163,9 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ## 当前版本
 
-- **v1.6.6（2026-10-05）**
+- **v1.6.7（2026-10-05）**
+  - 将文档与脚本示例统一为医学影像和自动驾驶等通用热门研究方向，移除与个人研究方向相关的示例。
+  - 发布文档使用项目团队署名，不展示个人化作者信息。
   - 增加可选的收割 checkpoint、受控未验证条目重试和诊断日志。
   - 细化 Crossref 验证原因与标题匹配提示，补充开发仓库回归测试。
 
@@ -477,3 +479,4 @@ querystrategist/                    # 正式发布目录
 每个子模块目录均含 `SKILL.sub.md`；仅保留实际被运行流程引用的 `scripts/` 与 `assets/` 内容。
 
 </details>
+

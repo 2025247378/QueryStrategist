@@ -23,7 +23,7 @@ Search B 通道：OpenAlex 收割 + Crossref 逐条验证（去幻觉）。
 容错: 每个环节独立 try/except，单点失败只记录 *_error，绝不整体崩溃。
 
 用法:
-    python harvest.py --query "organ-on-a-chip drug toxicity" --out harvest.json
+    python harvest.py --query "lung nodule deep learning detection" --out harvest.json
     python harvest.py --query "..." --mailto you@example.com
     python harvest.py --query "..." --no-verify            # 跳过 Crossref 验证
 
@@ -861,7 +861,7 @@ def harvest(query, per_platform=20, verify=True, mailto=None,
 
 def _demo(network_consent=False):
     return harvest(
-        "organ-on-a-chip drug toxicity screening",
+        "lung nodule deep learning detection",
         per_platform=3,
         verify=False,
         network_consent=network_consent,

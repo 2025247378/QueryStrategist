@@ -3,8 +3,8 @@ name: search_strategist_v1
 description: "检索策略师V1（第一轮检索） | 双通道执行：Search A 默认生成 WoS、Scopus、IEEE Xplore、Google Scholar、CNKI、万方六库分层检索式；Search B 经一次联网授权后使用 OpenAlex 梯度收割并由 Crossref 按 DOI 核验。结果收敛为范围卡、检索式、候选清单和使用说明，G2 确认后结束。"
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -198,7 +198,7 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 
 ```json
 {
-"report_version": "v1.6.6",
+"report_version": "v1.6.7",
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
     "search_focus": "balanced",
@@ -343,3 +343,4 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 - This skill calls two sub-skills (Query Crafter and Literature Harvester) and merges their outputs. It does not directly generate queries or call APIs.
 - The search focus is `balanced` for the default 通用检索 profile; explicit review/research/proposal/grant types adjust recommendation order without removing A0/A1/B.
 - The search strategy pack delivered at Step 5.5 (scope card + query pack + candidate list + usage guide) is the pipeline's final deliverable and the end of the QueryStrategist flow.
+

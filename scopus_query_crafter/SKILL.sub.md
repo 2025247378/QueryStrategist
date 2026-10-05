@@ -3,8 +3,8 @@ name: scopus_query_crafter
 description: "Scopus检索式构建器 | 将三级关键词转化为 Scopus Advanced Search 语法，生成 A0 对象+技术召回基线、A1 三层主题检索和 B TITLE/W-n 精准检索，支持字段代码、布尔和位置算符。QueryStrategist Search A 子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [Scopus, search query, bibliographic, QueryStrategist]
   triggers: [Scopus, 检索式, 高级检索]
 ---
@@ -167,3 +167,4 @@ TITLE-ABS-KEY(("autonomous vehicle" OR "self-driving car") AND ("computer vision
 ## 与其他 Skill 的衔接
 - **上游**：接收来自 Scope Definer 或 Search Strategist 的三层关键词和时间范围。
 - **下游**：生成的检索式直接交付用户使用（作为检索策略包中该平台的检索式）。
+

@@ -4,7 +4,7 @@
 
 > [中文说明](README.zh-CN.md)
 
-> **Version**: v1.6.6 (2026-10-05)
+> **Version**: v1.6.7 (2026-10-05)
 
 QueryStrategist is an interactive **AI agent skill for literature search, scholarly information retrieval, and research workflow support**. It uses LLM semantic understanding to structure a research idea, generate platform-specific queries, and optionally collect candidate metadata through OpenAlex and Crossref.
 
@@ -130,7 +130,7 @@ Start QueryStrategist. My research direction is: deep learning for medical image
 To generate only the six-database queries without API harvesting:
 
 ```text
-Only start Search A and generate six-database queries for: spectral imaging for quality assessment and size grading of farmed fish
+Only start Search A and generate six-database queries for: multimodal perception and object detection for autonomous driving
 ```
 
 For a full run, the system uses documented defaults and asks only for the key scope confirmation. Explicit user input always overrides defaults. The final pack is saved to `projects/<active_project_id>/deliverables/` unless the user provides another path.

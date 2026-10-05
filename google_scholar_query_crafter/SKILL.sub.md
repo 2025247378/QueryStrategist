@@ -3,8 +3,8 @@ name: google_scholar_query_crafter
 description: "Google Scholar检索式构建器 | 将三级关键词转化为不超过 256 字符的 A0 对象+技术召回查询、A1 三层主题查询和 B intitle 精准查询；支持 OR、短语与 -排除词并限制互补查询数量。QueryStrategist Search A 子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [Google Scholar, search query, scholar, QueryStrategist]
   triggers: [Google Scholar, 检索式, 学者]
 ---
@@ -160,3 +160,4 @@ version: v1.6.6
 6. **`OR`/`|` 必须大写或原样**：小写 `or` 会被忽略；`|` 是 `OR` 的同义写法。
 7. **长度 ≤ 256 字符**：超长检索式会被截断，长词表请拆分成多次检索再合并。
 8. 括号必须使用英文半角 `()`，多层嵌套时逐层包裹：`(A OR B) AND (C OR (D AND E))`。
+

@@ -3,8 +3,8 @@ name: ieee_query_crafter
 description: "IEEE Xplore检索式构建器 | 将三级关键词转化为 Advanced Search > Command Search 语法，生成 A0 对象+技术召回基线、A1 三层主题式、B 标题核心式及 C/D/E 变体，校验字段、NEAR/ONEAR、通配符和每个 search clause 25-term 限制。QueryStrategist Search A 子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [IEEE Xplore, command search, search query, engineering, QueryStrategist]
   triggers: [IEEE, 检索式, 工程文献, IEEE Xplore, Command Search, command search]
 ---
@@ -32,7 +32,7 @@ You are an expert research librarian specializing in systematic literature retri
 The user (or the calling skill, Search Strategist) must provide:
 1. **Research Direction**: A description of the research topic, with emphasis on the technology/method dimension (e.g., "deep learning for medical image segmentation").
 2. **Keyword Tiers** (from Scope Definer's Review Scope Confirmation Document):
-   - Tier 1 – Target Object/Domain: The subject or application domain. Retain exact domain phrases and include at least one standalone recall anchor (e.g. `fish` alongside `aquaculture fish`), either in Tier 1 or `tier1_recall_anchor`.
+- Tier 1 – Target Object/Domain: The subject or application domain. Retain exact domain phrases and include at least one standalone recall anchor (e.g. `nodule` alongside `lung nodule`), either in Tier 1 or `tier1_recall_anchor`.
    - Tier 2 – Technology/Method: The relevant techniques (e.g., deep learning, object detection, signal denoising, reinforcement learning, semantic segmentation).
    - Tier 3 – Application/Task: The specific problem (e.g., anomaly detection, fault diagnosis, behavior recognition, biomass estimation). Optional `tier3_recall_anchor` supplies standalone task concepts such as `quality`, `freshness`, or `grading`.
 3. **Date Range** (optional): Publication years to include (e.g., 2020-2025). On IEEE Xplore this is applied via the left-side `Publication Year` filter (see Step 2-F).
@@ -43,7 +43,7 @@ The user (or the calling skill, Search Strategist) must provide:
 ### Step 1: Deconstruct the Research Question
 Based on the input keyword tiers, identify and organize the key concepts. For IEEE Xplore, prioritize the technology/method and application/task tiers, as these align with the platform's strength in engineering and computer science. The species/object tier is used to narrow the application domain.
 
-Before query construction, ensure Tier 1 has a standalone platform recall anchor. Derive only a repeated center word from multiple compound phrases (e.g. `fish` from `aquaculture fish`, `farmed fish`, `fish fillet`), or use explicit `tier1_recall_anchor`; do not promote isolated modifiers such as `farmed` or `cultured` into standalone terms.
+Before query construction, ensure Tier 1 has a standalone platform recall anchor. Derive only a repeated center word from multiple compound phrases (e.g. `nodule` from `lung nodule`, `pulmonary nodule`, `solitary nodule`), or use explicit `tier1_recall_anchor`; do not promote isolated modifiers such as `lung` or `pulmonary` into standalone terms.
 
 ### Step 2: Construct the Core Query
 Using IEEE Xplore's **Command Search** syntax (Advanced Search → Command Search tab), build the query following these rules.
@@ -89,7 +89,7 @@ For exact-phrase matching, always quote the value: `"Document Title":"deep learn
 **C. Phrase Searching**
 - Enclose multi-word terms in double quotes for exact-phrase matching: `"deep learning"`, `"computer vision"`.
 - ⚠️ A value without quotes is treated as AND of its words: `"Document Title":web services` finds `web` AND `services`, not the phrase. Always quote phrases.
-- Exact quotes also suppress automatic stemming. Keep simple single-word concepts such as `fish`, `freshness`, and `protein` unquoted unless exact whole-word matching is intentional.
+- Exact quotes also suppress automatic stemming. Keep simple single-word concepts such as `nodule`, `detection`, and `segmentation` unquoted unless exact whole-word matching is intentional.
 
 **D. Wildcards**
 - `*` = multi-character truncation (`detect*` → detect, detects, detection, detector).
@@ -111,7 +111,7 @@ For exact-phrase matching, always quote the value: `"Document Title":"deep learn
 - **Max 25 search terms per search clause**（官方原文："You can enter a maximum of 25 search terms per search clause"）。IEEE Search Tips 将 search clause 定义为 **consecutive search terms not separated by a Boolean operator**。因此 `A OR B OR C` 的 OR 会分隔 clause，不能把整条查询的所有同义词累计成一个 25-term 总预算。引号短语内部的连续单词按保守口径逐词检查；字段名和布尔/邻近运算符不计入。
 - ⚠️ **不要因整条查询含有超过 25 个 OR 同义词而拆分或丢词。** 仅当某个未被布尔运算符分隔的原子 clause 自身超过 25 个连续词时才报错，并要求改写该原子表达式。
 - **同字段内禁止括号嵌套 OR**（官方原文）：`"Document Title":("radio frequency identification" OR rfid)` **无效**；正确写法是逐词重复字段名再用外层括号分组：`("Document Title":"radio frequency identification" OR "Document Title":rfid) AND scheduling`。
-- **无字段名的裸词/裸短语合法**（官方默认搜全部 metadata，见 A 节）——`("fish" OR "whole fish") AND ("spectral imaging" OR "hyperspectral imaging")` 是**合法且符合官方风格**的写法，不必给每个词加字段名。
+- **无字段名的裸词/裸短语合法**（官方默认搜全部 metadata，见 A 节）——`("lung nodule" OR "pulmonary nodule") AND ("deep learning" OR "convolutional neural network")` 是**合法且符合官方风格**的写法，不必给每个词加字段名。
 - Search is **case-insensitive**.
 - IEEE Xplore ignores most punctuation; only `&`, `+`, and `/` are recognized as special characters. Quote a punctuated expression only when exact phrase behavior is intended, and replace punctuation with spaces when constructing an exact phrase as advised by Search Tips.
 
@@ -168,7 +168,7 @@ Present the finalized search query in a clearly formatted text box that the user
 ```
 *Example:*
 ```
-(fish OR "aquaculture fish" OR "fish fillet") AND ("spectral imaging" OR "hyperspectral imaging" OR "multispectral imaging") NOT ("water quality monitoring")
+(nodule OR "lung nodule" OR "pulmonary nodule") AND ("deep learning" OR "convolutional neural network") NOT ("non-medical imaging")
 ```
 *说明：如果 A0 仍为 0，先检查对象通用锚点与粘贴位置；不要继续叠加任务词或标题字段。年份在结果页左侧 `Publication Year` 过滤。*
 
@@ -206,7 +206,7 @@ Present the finalized search query in a clearly formatted text box that the user
 ```
 *Example:*
 ```
-(fish OR "aquaculture fish") AND (("spectral imaging" OR "hyperspectral imaging") NEAR/10 (freshness OR grading))
+(nodule OR "lung nodule") AND (("deep learning" OR "convolutional neural network") NEAR/10 (detection OR segmentation))
 ```
 *说明：NEAR/ONEAR 是 Command Search 专属（结构化检索不可用）。`NEAR` = 无序（两词任一先后均可），`ONEAR` = 有序（左项必须在前）；运算符全大写。参与项与 Query A 一样默认无字段名（官方示例风格）；需要精确限定再按 Query B 的格式加字段名。*
 
@@ -231,3 +231,4 @@ Present the finalized search query in a clearly formatted text box that the user
 - **Author names**: try multiple formats — `"Authors":"LeCun, Y."` and `"Authors":"Yann LeCun"`.
 - IEEE Xplore is predominantly English IEEE / partner content. For broader coverage, run Scopus or Web of Science in parallel.
 - Generated queries are starting points — iterate: too few results → drop field restrictions (or remove `"Document Title":` to search all metadata); too many → add `"Document Title":` or `"Abstract":` restrictions or constrain `"Publication Title":`.
+

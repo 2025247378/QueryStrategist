@@ -3,8 +3,8 @@ name: cnki_query_crafter
 description: "CNKI检索式构建器 | 将中文三级关键词转化为知网高级/专业检索语法，生成 A0 主题对象+技术召回式、A1 三层主题式和 B 题名/主题精准式，支持 SU/TI/KY/AB 等字段与邻近算符。QueryStrategist 中文补充子模块。Pure LLM-agent skill; no external MCP server required."
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [CNKI, search query, Chinese literature, QueryStrategist]
   triggers: [CNKI, 知网, 中文检索式, 中文文献]
 ---
@@ -118,3 +118,4 @@ Line 2 (主题): 计算机视觉 + 机器视觉 (Logic: AND)
 - **Field codes are case-sensitive labels** (`SU`, `TI`, `KY`, ...); there is **no** `TKA` code — use `SU` (主题), `TI` (题名), `KY` (关键词), or `AB` (摘要) instead.
 - **Professional search** uses `AND`/`OR`/`NOT` between fields and `* + -` within a field; both forms are valid CNKI syntax.
 - Proximity operators (`/NEAR N`, `/PREV N`, `#`, etc.) require the expression wrapped in single quotes `' '`.
+

@@ -3,8 +3,8 @@ name: setup_wizard
 description: "QueryStrategist 零配置启动模块 | 自动检测交互语言、建立或恢复项目，并用安全默认值生成完整六库检索所需配置。不得逐项询问目标语言、目标期刊、写作类型、期刊层级、时间跨度、中文补充或行业报告；用户当前消息已明确提供的偏好直接覆盖默认值。Step 0 只在缺少研究方向或需要选择已有项目时提问，G0 为内部自动校验点。"
 license: MIT
 metadata:
-  skill-author: PanY
-version: v1.6.6
+  skill-author: QueryStrategist Team
+version: v1.6.7
   keywords: [literature search, zero-config, setup, full coverage, QueryStrategist]
   triggers: [文献检索配置, 检索设置, setup, 开始配置]
 ---
@@ -159,3 +159,4 @@ version: v1.6.6
 - `multi_window` 允许 `start: null`，但必须有整数 `end` 和非空 `presets_years`。
 - 用户后续提出“改为综述”“只看近五年”“针对某期刊优化”等请求时，更新相应字段并重新生成受影响的下游内容，不重新运行七项问答。
 - 直接模式 `search_a_all`、`single_platform`、`adjust_existing` 仍由主 Skill 路由，不进入本模块。
+

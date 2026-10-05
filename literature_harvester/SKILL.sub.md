@@ -3,8 +3,8 @@ name: literature_harvester
 description: "文献自动收割器（两源版）| OpenAlex 无密钥收割主源 + Crossref 按 DOI 逐条验证（去幻觉：核对 title/year 一致性，剔除疑似幻觉/错配条目）。含防限流（429退避/请求预算守卫）+ 验证失败即标记 dropped，绝不整体崩溃。QueryStrategist Search Strategist Search B 子模块。"
 license: MIT
 metadata:
-  skill-author: PanY
-  version: v1.6.6
+  skill-author: QueryStrategist Team
+  version: v1.6.7
   keywords: [literature harvesting, OpenAlex, Crossref, API, QueryStrategist]
   triggers: [文献收割, harvester, API收割, 元数据]
 ---
@@ -34,7 +34,7 @@ OpenAlex 收割 + Crossref 逐条验证（Search B 通道，对应 Search Strate
 ```bash
 # 方式一：首次运行自动安装依赖
 python scripts/harvest.py --check-deps          # 仅检查/安装依赖，验证环境就绪
-python scripts/harvest.py --network-consent --query "organ-on-a-chip drug toxicity" --out harvest.json
+python scripts/harvest.py --network-consent --query "lung nodule deep learning detection" --out harvest.json
 
 # 可选参数
 python scripts/harvest.py --network-consent --query "..." --no-verify
@@ -237,3 +237,4 @@ filter=title_and_abstract.search:<物种词\|...>,title_and_abstract.search:<技
 三个 `title_and_abstract.search` 用逗号分隔= AND 逻辑，确保被检记录同时包含物种、技术、应用三类词。
 
 **排除词正确用法（V2.3）**：OpenAlex 文本搜索过滤器**不支持任何 API 层排除语法**（`-` 静默失效、`!` 直接 400，实测于 2026-08-10）。排除词一律通过 `harvest_openalex_filtered(exclude_terms=[...])` 参数传入，脚本在**本地**按标题和 inverted-index 摘要包含任一排除词剔除记录；双词短语需完整连续子串才能命中。
+
