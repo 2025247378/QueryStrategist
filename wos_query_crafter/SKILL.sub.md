@@ -4,7 +4,7 @@ description: "WoS检索式构建器 | 将三级关键词转化为 Web of Science
 license: MIT
 metadata:
   skill-author: QueryStrategist Team
-version: v1.6.7
+version: v1.7.0
   keywords: [Web of Science, search query, bibliographic, QueryStrategist]
   triggers: [WoS, web of science, 检索式]
 ---

@@ -4,7 +4,7 @@
 
 > [中文说明](README.zh-CN.md)
 
-> **Version**: v1.6.7 (2026-10-05)
+> **Version**: v1.7.0 (2026-10-07)
 
 QueryStrategist is an interactive **AI agent skill for literature search, scholarly information retrieval, and research workflow support**. It uses LLM semantic understanding to structure a research idea, generate platform-specific queries, and optionally collect candidate metadata through OpenAlex and Crossref.
 
@@ -104,14 +104,14 @@ The harvested metadata is a **candidate reference list, not a trusted corpus**. 
 
 ## Deliverables
 
-After completion, open `index.html` first. It links the four core deliverables:
+After completion, open `index.html` first. It embeds the four core deliverables in one offline workbench:
 
 1. **Scope card**: research objects, technologies, tasks, keywords, exclusions, and strategy priorities.
 2. **Query pack**: A0, A1, and B queries for Web of Science, Scopus, IEEE Xplore, Google Scholar, CNKI, and Wanfang.
 3. **Candidate literature list**: deduplicated metadata, DOI links, source labels, verification results, and OA status.
 4. **Usage guide**: where to paste each query, expected result patterns, and ways to broaden or narrow a search.
 
-Markdown, CSV, and JSON exports remain available for editing, archiving, and downstream processing. The generated HTML pages work offline and provide a Chinese/English interface toggle. Query strings, keywords, exclusions, paper titles, authors, venues, and DOI values remain unchanged when the interface language changes.
+The same directory also contains `QueryStrategist_strategy_pack.zip`, a single downloadable archive with the Markdown, CSV, JSON sidecars, and standalone audit pages. Users do not need to open those files one by one. The generated HTML works offline and provides a Chinese/English interface toggle. Query strings, keywords, exclusions, paper titles, authors, venues, and DOI values remain unchanged when the interface language changes.
 
 ## Quick Start
 

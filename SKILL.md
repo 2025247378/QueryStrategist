@@ -4,7 +4,7 @@ description: "QueryStrategist（文献检索策略师）是一款面向科研人
 license: MIT
 metadata:
   skill-author: QueryStrategist Team
-  version: v1.6.7
+  version: v1.7.0
   keywords: [literature search, query strategy, retrieval, human-in-the-loop, QueryStrategist]
   triggers: [文献检索, 检索策略, 建检索式, QueryStrategist, start querystrategist]
 ---
@@ -85,14 +85,11 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 | 交付内容 | 用户用途 |
 |---|---|
-| **index.html** | 唯一默认阅读入口，优先打开此文件 |
-| **scope_card.html** | 检查研究范围、关键词和排除项 |
-| **query_pack.html** | 浏览并复制六个平台检索式 |
-| **candidate_list.html** | 搜索、筛选和排序候选文献 |
-| **usage_guide.html** | 查看各数据库粘贴位置和调整方法 |
+| **index.html** | 内嵌浏览四件套，支持中英切换、复制、筛选和排序 |
+| **QueryStrategist_strategy_pack.zip** | 一次下载 Markdown、CSV、JSON 和独立审计页面 |
 | Markdown/CSV 文件 | 用于编辑、归档或导入其他工具 |
 
-普通阅读只需打开 **index.html**。HTML 可离线使用；其他 Markdown、CSV 和子页面作为导出或审计备份保留。聊天默认只展示摘要，用户明确要求审计模式时才完整展开全部检索式与候选条目。
+普通阅读只需打开 **index.html**；它直接内嵌范围卡、六库检索式、候选文献和使用说明，不依赖其他 HTML 文件。需要编辑、结构化处理或逐页审计时，再下载 `QueryStrategist_strategy_pack.zip`。聊天默认只展示摘要，用户明确要求审计模式时才完整展开全部检索式与候选条目。
 
 ## 使用示例
 
@@ -139,7 +136,7 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ### 中文文件出现乱码时怎么办？
 
-优先打开交付目录中的 index.html。HTML 是默认阅读入口；Markdown 和 CSV 已使用适合 Windows 的 UTF-8 编码。
+优先打开交付目录中的 index.html。它内嵌四件套并可离线使用；需要编辑或审计时再下载 `QueryStrategist_strategy_pack.zip`。Markdown 和 CSV 已使用适合 Windows 的 UTF-8 编码。
 
 ### 中途退出后可以继续吗？
 
@@ -163,7 +160,7 @@ QueryStrategist（文献检索策略师）是一款面向科研人员的交互�
 
 ## 当前版本
 
-- **v1.6.7（2026-10-05）**
+- **v1.7.0（2026-10-07）**
   - 将文档与脚本示例统一为医学影像和自动驾驶等通用热门研究方向，移除与个人研究方向相关的示例。
   - 发布文档使用项目团队署名，不展示个人化作者信息。
   - 增加可选的收割 checkpoint、受控未验证条目重试和诊断日志。
@@ -228,7 +225,7 @@ G2 确认后，自动产出四份相互衔接的文件（模板见 `search_strat
 3. **`candidate_list.csv/.md/.html`** — 文献候选清单（去重元数据 + OA 状态 + DOI 链接，标注"候选清单、非最终语料"）；
 4. **`usage_guide.md/.html`** — 使用说明（检索式填入位置 + 命中量级预估 + 调宽/调窄方法 + 按写作类型建议）。
 
-Markdown 和 CSV 统一写为 UTF-8 BOM；HTML 为默认阅读入口、可离线打开。HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，禁止维护第二套内容。
+Markdown 和 CSV 统一写为 UTF-8 BOM；`index.html` 为内嵌式默认阅读入口、可离线打开。独立 HTML 页面作为审计备份收进 `QueryStrategist_strategy_pack.zip`。全部 HTML 必须由 `_shared_tools/scripts/render_deliverables.py` 从同名 Markdown 生成，禁止维护第二套内容。
 默认交付目录为 `projects/<active_project_id>/deliverables/`；用户已明确提供自定义路径时直接采用。最终交付目录必须生成 `index.html`，该文件是唯一默认阅读入口；各页面在 JavaScript 不可用时仍须完整展示原始内容。
 
 所有字段继承 Step 0–2 上游选择（`【继承自 …】` 标注），禁止凭空生成。
@@ -378,7 +375,7 @@ Before Search B, use the consent wording defined in `search_strategist_v1/SKILL.
 | 1 | Scope Definer | Configuration Profile | ✅ 已实现 |
 | 2 | Search Strategist V1 | Scope Document | ✅ 已实现 |
 
-> **终点（Step 2 完成后）**：Search Strategist V1 交付**检索策略包**作为最终交付物：范围卡、6 库检索式合集、全量文献候选清单和使用说明。Markdown/CSV 为 UTF-8 BOM，同时生成对应离线 HTML；用户在 G2 确认后流水线结束。
+> **终点（Step 2 完成后）**：Search Strategist V1 交付**检索策略包**作为最终交付物：范围卡、6 库检索式合集、全量文献候选清单和使用说明。默认阅读入口是内嵌四件套的 `index.html`；原始文件和独立审计页面集中在 `QueryStrategist_strategy_pack.zip`；用户在 G2 确认后流水线结束。
 
 ### Error Handling
 If a sub-module encounters an error or cannot complete:

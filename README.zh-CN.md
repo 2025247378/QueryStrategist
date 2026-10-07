@@ -4,7 +4,7 @@
 
 > QueryStrategist（文献检索策略师）是一款面向科研人员的 LLM 驱动交互式文献检索 Skill，支持学术检索、学术信息检索和科研工作流辅助。你只需提供研究方向，它会运用 LLM 语义理解自动识别研究对象、技术方法、任务指标和范围边界，生成适用于 Web of Science、Scopus、IEEE Xplore、Google Scholar、CNKI 和万方的可复制高级检索式。经授权后，还可通过 OpenAlex 收集候选文献，并使用 Crossref 核验 DOI。最终交付范围卡、六库检索式、候选文献清单和使用说明，适用于综述、论文、学位论文、开题报告和基金申请。
 >
-> **版本**：v1.6.7（2026-10-05）
+> **版本**：v1.7.0（2026-10-07）
 
 ![QueryStrategist 检索策略工作台总览](img/product-overview.png)
 
@@ -64,6 +64,8 @@
 流程终点（G2 确认后）产出**检索策略包**，默认落盘于 `projects/<active_project_id>/deliverables/`；用户已提供路径时直接使用。标准模板见 `search_strategist_v1/assets/search_strategy_pack_template.md`：
 
 - **`index.html` — 唯一默认阅读入口**：统一导航到范围卡、检索式、候选文献和使用说明；无需安装软件，可离线打开。其他文件作为导出和审计备份保留。
+
+- **`QueryStrategist_strategy_pack.zip` — 完整归档包**：集中保存 Markdown、CSV、JSON 侧车和独立审计页面。普通用户无需逐个下载或打开这些文件。
 
 - **`scope_card.md/.html` — 范围界定卡**：三级关键词体系（Tier1 对象 / Tier2 必需技术锚点与支持方法 / Tier3 任务）+ 中英文排除词分级 + 写作类型 + 策略权重（查全/查准/新颖性）；`scope_card.i18n.json` 提供另一语言正文，使 HTML 可一键切换中英文。写作类型等受控配置值使用标准中英对应（如“综述”与“Review”），自定义值保留用户原文。
 - **`query_pack.md/.html` — 多平台检索式合集**：6 库高级检索式和 Query QA 摘要，每库给 A0（对象+必需技术召回基线）、A1（三层主题式）和 B（平台专属精准式）；HTML 可切换标题、层级名称、年份筛选提示和操作控件的中英文，检索式代码块始终保持原文且只有一份。综述导向变体仅作补充，不把整体策略限制为 review-only。

@@ -4,7 +4,7 @@ description: "检索策略师V1（第一轮检索） | 双通道执行：Search 
 license: MIT
 metadata:
   skill-author: QueryStrategist Team
-version: v1.6.7
+version: v1.7.0
   keywords: [literature search, query building, database retrieval, QueryStrategist]
   triggers: [第一轮检索, search v1, 检索策略, 文献检索]
 ---
@@ -198,7 +198,7 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 
 ```json
 {
-"report_version": "v1.6.7",
+"report_version": "v1.7.0",
   "saved_at": "ISO-8601 datetime",
   "retrieval_context": {
     "search_focus": "balanced",
@@ -247,7 +247,7 @@ OpenAlex 收割响应**原生携带** `open_access` 字段（`is_oa` / `oa_statu
 Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
 
 ### Step 5.5: Deliver Search Strategy Pack (MANDATORY — pipeline endpoint, G2)
-**CRITICAL：Search Strategist V1 是 QueryStrategist 主流水线（Step 0–2）的终点。Step 5 保存文献采集报告后，立即进入本步，把结果收敛为检索策略包四项逻辑交付物（范围卡 + 6 库检索式合集 + 文献候选清单 + 使用说明）。每份 Markdown 同步生成离线 HTML，CSV/Markdown 使用 UTF-8 BOM；HTML 是默认阅读入口。然后停在 G2 决策门等用户确认。本步不加载任何下游综述选题模块，不询问 PDF 文件夹路径，不替用户下载 PDF。**
+**CRITICAL：Search Strategist V1 是 QueryStrategist 主流水线（Step 0–2）的终点。Step 5 保存文献采集报告后，立即进入本步，把结果收敛为检索策略包四项逻辑交付物（范围卡 + 6 库检索式合集 + 文献候选清单 + 使用说明）。默认入口 `index.html` 内嵌四件套，独立 HTML 作为审计备份，CSV/Markdown 使用 UTF-8 BOM，并统一打包为 `QueryStrategist_strategy_pack.zip`。然后停在 G2 决策门等用户确认。本步不加载任何下游综述选题模块，不询问 PDF 文件夹路径，不替用户下载 PDF。**
 
 **为什么有本步：** 检索策略包是主流水线的最终交付物——AI 把"检索策略"（范围卡 + 检索式 + 候选清单 + 使用说明）做对做好，下载 PDF 与写作是用户自己的事。模板见 `assets/search_strategy_pack_template.md`；所有字段标注上游出处（【继承自 Step 0/1/2】），禁止凭空生成。
 
@@ -261,9 +261,9 @@ Then proceed immediately to **Step 5.5: Deliver Search Strategy Pack**.
    - `usage_guide.md`：平台填入位置、筛选下载方法和写作类型策略权重；
    - `usage_guide.i18n.json`：使用说明另一语言的 Markdown 正文；`source_language` 必须与 `usage_guide.md` 一致。
    两个 `.i18n.json` 均使用模板规定的 `schema_version: 1`，必须提供与源 Markdown 结构一致的完整译文，不得只翻译 H1 或少量段落。标题、说明性文字、表头、首列字段标签和受控配置值必须翻译；写作类型使用标准对应：通用检索 / General Search、综述 / Review、研究论著或实验研究 / Research Article、学位论文 / Thesis / Dissertation、开题报告 / Research Proposal、基金申请 / Grant Proposal、调研报告 / Research Report、自定义 / Custom。自定义写作类型、关键词、排除词、平台名、A0/A1/B、布尔与邻近算符、DOI 和文献元数据保持原样。
-3. **规范编码并生成 HTML 工作台（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；同时生成默认入口 `index.html`、四份内容页，并给 Markdown/CSV 写入 UTF-8 BOM。范围卡和使用说明从双语侧车嵌入中英文正文，并校验标题层级、表格形状、列表和代码块结构；英文译文仍含未翻译中文结构或大段中文说明时直接失败。检索式页以单份检索式数据切换标题、上下文、QA 摘要、A0/A1/B/C/D1/D2/E 层级名称和操作提示；候选清单页自动识别包含 Title/DOI/Year 的主文献表，并以单份文献数据切换标题、统计标签、表头、状态、筛选和移动端字段标签。切换语言不得复制或改写检索式、关键词、文献题名、作者、期刊、年份和 DOI。
-4. **写后校验（缺一不可）**：确认 `index.html`、所有 `.md/.csv/.html` 和两个 `.i18n.json` 文件存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 `U+FFFD` 替换字符；两个侧车 JSON 可解析、`schema_version` 为 1、共同覆盖 `zh` 与 `en`，且通过结构完整性和未翻译正文检查；HTML 含 `<meta charset="utf-8">`；无外部脚本/样式依赖；范围卡和使用说明 HTML 均含 `data-content-lang="zh"` 与 `data-content-lang="en"`；检索式页和候选清单页均含结构化双语标记；候选筛选工具必须绑定主文献表而不是统计表；`query_pack.md` 与 `query_pack.html` 中的每条检索式逐字一致，候选文献题名、作者和 DOI 不因语言切换产生重复或缺失。任一校验失败均不得进入 G2。
-5. **完成提示与 G2 门控**：先提示“已生成检索策略工作台，请优先打开 `index.html`。四件套内容已整合在该入口中，其他文件为导出备份，通常不需要逐个查看。”然后用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号：
+3. **规范编码并生成 HTML 工作台（MANDATORY）**：运行 `python <QueryStrategist包根>/_shared_tools/scripts/render_deliverables.py --directory <交付目录>`。脚本只替换正文中的易乱码展示符号，不改写 fenced code block 中的检索式；生成直接内嵌四件套的默认入口 `index.html`、四份独立审计页面，并给 Markdown/CSV 写入 UTF-8 BOM；随后将原始 Markdown、CSV、JSON 侧车和独立页面打包为 `QueryStrategist_strategy_pack.zip`。范围卡和使用说明从双语侧车嵌入中英文正文，并校验标题层级、表格形状、列表和代码块结构；英文译文仍含未翻译中文结构或大段中文说明时直接失败。检索式页以单份检索式数据切换标题、上下文、QA 摘要、A0/A1/B/C/D1/D2/E 层级名称和操作提示；候选清单页自动识别包含 Title/DOI/Year 的主文献表，并以单份文献数据切换标题、统计标签、表头、状态、筛选和移动端字段标签。切换语言不得复制或改写检索式、关键词、文献题名、作者、期刊、年份和 DOI。
+4. **写后校验（缺一不可）**：确认 `index.html`、四件套源文件、独立审计页面、两个 `.i18n.json` 文件和 `QueryStrategist_strategy_pack.zip` 存在且字节数大于 0；Markdown/CSV 前 3 字节为 `EF BB BF`；所有文本可严格按 UTF-8 解码且不含 `U+FFFD` 替换字符；两个侧车 JSON 可解析、`schema_version` 为 1、共同覆盖 `zh` 与 `en`，且通过结构完整性和未翻译正文检查；HTML 含 `<meta charset="utf-8">`；无外部脚本/样式依赖；范围卡和使用说明 HTML 均含 `data-content-lang="zh"` 与 `data-content-lang="en"`；聚合 `index.html` 必须直接包含四个 `data-page` 文档区块且不得依赖独立页面；检索式页和候选清单页均含结构化双语标记；候选筛选工具必须绑定主文献表而不是统计表；`query_pack.md` 与 HTML 中的每条检索式逐字一致，候选文献题名、作者和 DOI 不因语言切换产生重复或缺失。任一校验失败均不得进入 G2。
+5. **完成提示与 G2 门控**：先提示“已生成检索策略工作台，请直接打开 `index.html`。四件套已整合在该入口中；需要编辑或审计时，再下载 `QueryStrategist_strategy_pack.zip`，通常不需要逐个查看其他文件。”然后用 `AskUserQuestion` 弹窗；无此工具则聊天内列编号：
    - question（按交互语言）: "检索策略包已交付（范围卡 + 检索式 + 候选清单 + 使用说明）。确认完成流水线，还是需要调整？"
    - options: 「确认完成」/「需要调整」
 6. **用户确认后（G2 通过）**：输出完成总结，流水线结束。

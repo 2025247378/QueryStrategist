@@ -4,7 +4,7 @@ description: "Wanfang检索式构建器 | 将中文三级关键词转化为万�
 license: MIT
 metadata:
   skill-author: QueryStrategist Team
-version: v1.6.7
+version: v1.7.0
   keywords: [Wanfang, search query, Chinese literature, QueryStrategist]
   triggers: [万方, 检索式, 中文文献]
 ---

@@ -6,6 +6,7 @@ import importlib.util
 import json
 import re
 import sys
+import zipfile
 from datetime import date
 from pathlib import Path
 
@@ -25,6 +26,7 @@ DEFAULT_MARKDOWN = (
     "usage_guide.md",
 )
 DEFAULT_CSV = ("candidate_list.csv",)
+ARCHIVE_NAME = "QueryStrategist_strategy_pack.zip"
 BILINGUAL_SIDECARS = {
     "scope_card": "scope_card.i18n.json",
     "usage_guide": "usage_guide.i18n.json",
@@ -44,6 +46,7 @@ INDEX_REQUIRED_I18N = (
     "open_access",
     "qa_label",
     "home_note",
+    "download_archive",
     "offline_package",
     "local_files",
 )
@@ -597,8 +600,9 @@ def _write_bom(path, text):
         stream.write(text)
 
 
-def _validate_index_contract(index_html):
+def _validate_index_contract(index_html, available_pages=None):
     """Keep the generated overview page bilingual and structurally inspectable."""
+    available_pages = available_pages or tuple(WORKBENCH.PAGE_META)
     required = [
         key
         for key in INDEX_REQUIRED_I18N
@@ -610,11 +614,33 @@ def _validate_index_contract(index_html):
         required.append("language toggle translation marker")
     if 'data-summary-field="query_count"' not in index_html:
         required.append("query count summary marker")
+    for page_key in available_pages:
+        if f'id="document-{page_key}"' not in index_html:
+            required.append(f"embedded document {page_key}")
+    page_pattern = "|".join(re.escape(key) for key in available_pages)
+    if page_pattern and re.search(rf'href="(?:{page_pattern})\.html"', index_html):
+        required.append("index must not depend on standalone HTML pages")
     if required:
         raise ValueError(
             "generated index.html failed the bilingual contract: "
             + ", ".join(required)
         )
+
+
+def _build_archive(directory):
+    """Package editable exports and standalone audit pages without the archive itself."""
+    archive_path = directory / ARCHIVE_NAME
+    members = []
+    for path in sorted(directory.iterdir()):
+        if not path.is_file() or path.name in {ARCHIVE_NAME, "index.html"}:
+            continue
+        if path.suffix.lower() not in {".md", ".csv", ".json", ".html"}:
+            continue
+        members.append(path)
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in members:
+            archive.write(path, arcname=path.name)
+    return archive_path
 
 
 def process_directory(
@@ -634,6 +660,7 @@ def process_directory(
 
     available_pages = [key for key in WORKBENCH.PAGE_META if key in normalized_files]
     summary = _build_summary(normalized_files)
+    embedded_documents = []
     for key in available_pages:
         path = directory / f"{key}.md"
         html_path = path.with_suffix(".html")
@@ -645,6 +672,7 @@ def process_directory(
             raise ValueError(
                 f"missing required bilingual sidecar: {directory / BILINGUAL_SIDECARS[key]}"
             )
+        page_body = _render_page_body(normalized_files[key], bilingual_content)
         _write_bom(
             html_path,
             markdown_to_html(
@@ -656,14 +684,17 @@ def process_directory(
                 bilingual_content,
             ),
         )
+        embedded_documents.append((key, page_body))
         processed.append(html_path)
         if sidecar_path:
             processed.append(sidecar_path)
 
     if available_pages:
         index_path = directory / "index.html"
-        index_html = WORKBENCH.index_page(available_pages, summary)
-        _validate_index_contract(index_html)
+        index_html = WORKBENCH.index_page(
+            available_pages, summary, embedded_documents=embedded_documents
+        )
+        _validate_index_contract(index_html, available_pages)
         _write_bom(index_path, index_html)
         processed.append(index_path)
     for name in csv_names:
@@ -675,6 +706,8 @@ def process_directory(
         processed.append(path)
     if not processed:
         raise FileNotFoundError(f"no deliverables found in {directory}")
+    archive_path = _build_archive(directory)
+    processed.append(archive_path)
     return processed
 
 

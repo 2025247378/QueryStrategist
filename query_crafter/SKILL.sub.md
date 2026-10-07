@@ -4,7 +4,7 @@ description: "检索式构建总控 | 自动调用全部6个平台子skill（WoS
 license: MIT
 metadata:
   skill-author: QueryStrategist Team
-version: v1.6.7
+version: v1.7.0
   keywords: [search query, database, orchestration, QueryStrategist]
   triggers: [检索式, query crafter, 检索式总控, 多平台检索]
 ---

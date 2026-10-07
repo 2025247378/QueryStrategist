@@ -4,7 +4,7 @@ description: "Scopus检索式构建器 | 将三级关键词转化为 Scopus Adva
 license: MIT
 metadata:
   skill-author: QueryStrategist Team
-version: v1.6.7
+version: v1.7.0
   keywords: [Scopus, search query, bibliographic, QueryStrategist]
   triggers: [Scopus, 检索式, 高级检索]
 ---

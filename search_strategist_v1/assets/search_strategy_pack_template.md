@@ -3,7 +3,7 @@
 > 本模板定义 QueryStrategist 流水线终点（Step 2 / G2 确认后）交付的**检索策略包**标准结构。
 > 包含四项相互衔接的逻辑交付物，默认落盘于 `projects/<active_project_id>/deliverables/`。
 > 所有字段必须标注上游出处（`【继承自 …】`），禁止凭空生成；无出处条目标记【待补】并向用户确认。
-> Markdown 是可编辑源文件，HTML 是默认阅读入口；CSV 和 Markdown 统一使用 UTF-8 BOM。
+> `index.html` 是内嵌四件套的默认阅读入口；Markdown、CSV、JSON 和独立审计页面统一收进 `QueryStrategist_strategy_pack.zip`。CSV 和 Markdown 使用 UTF-8 BOM。
 
 ## 交付格式与编码硬规则
 
@@ -55,8 +55,8 @@
 - [ ] 落盘：四项逻辑交付物及两个双语侧车均已写入 `projects/<active_project_id>/deliverables/` 或用户明确指定的目录
 - [ ] 编码：Markdown/CSV 为 UTF-8 BOM，双语侧车为有效 UTF-8 JSON，所有文件不含 U+FFFD
 - [ ] 阅读：四份 Markdown 均已生成同名离线 HTML
-- [ ] 入口：`index.html` 可导航到四份内容页，页面无外部资源请求
-- [ ] 交互：检索式可复制；候选清单的搜索、筛选、排序绑定包含 Title/DOI/Year 的主文献表而不是统计表；四份内容页均可切换中英文界面或正文；关闭 JavaScript 后主 Markdown 原文仍完整
+- [ ] 入口：`index.html` 直接内嵌四份内容，页面无外部资源请求；`QueryStrategist_strategy_pack.zip` 集中保存原始文件与独立审计页
+- [ ] 交互：聚合入口中的检索式可复制；候选清单的搜索、筛选、排序绑定包含 Title/DOI/Year 的主文献表而不是统计表；四份内容页均可切换中英文界面或正文；关闭 JavaScript 后独立审计页仍可阅读完整 Markdown 原文
 - [ ] 保真：`query_pack.md` 与 `query_pack.html` 中检索式逐字一致；候选文献题名、作者、期刊、年份和 DOI 在切换前后保持唯一且不变
 - [ ] 授权：Search B 网络授权状态已记录；拒绝时未伪造空收割成功
 

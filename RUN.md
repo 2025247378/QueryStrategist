@@ -1,6 +1,6 @@
 # RUN.md — QueryStrategist (Step 0–2) 运行入口
 
-版本：v1.6.7（以根目录 VERSION 为准）
+版本：v1.7.0（以根目录 VERSION 为准）
 
 ## 快速开始
 
@@ -43,7 +43,7 @@ QueryStrategist/
 | `_shared_tools` | `ensure_tool.py` | 开源工具检测/隔离安装（清华镜像直连） |
 | `_shared_tools` | `validate_skills.py` | 套件自校验（frontmatter 合规检查；路径自动推导，可在发布包内直接运行） |
 | `_shared_tools` | `validate_pipeline_state.py` | 项目配置与流水线状态结构校验 |
-| `_shared_tools` | `render_deliverables.py` | Markdown/CSV 编码规范化并生成离线 HTML |
+| `_shared_tools` | `render_deliverables.py` | Markdown/CSV 编码规范化，生成内嵌式离线 `index.html`，并打包完整归档 ZIP |
 
 ## 依赖安装
 
